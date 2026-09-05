@@ -174,7 +174,13 @@ $('go').onclick = async () => {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({room, user})
     });
-    if (!r.ok) throw new Error('起任务失败 HTTP ' + r.status + ' ' + await r.text());
+    if (!r.ok){
+      // 把服务端透出来的腾讯错误码显示全。之前这里只显示 "HTTP 500"，
+      // 排查全靠去翻服务器日志——探针页这样最没用。
+      let why = await r.text();
+      try { why = JSON.parse(why).detail || why; } catch(e){}
+      throw new Error(why);
+    }
     const s = await r.json();
     taskId = s.task_id;
 

@@ -24,6 +24,7 @@ import os
 import re
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -131,27 +132,64 @@ class SessionReq(BaseModel):
     user: str
 
 
+LIVE_TASKS = {}      # room -> task_id，用来在重试前把上一次的收干净
+
+
 @app.post("/voicekit/api/session")
 def start_session(req: SessionReq):
-    """发 UserSig 并起 AI 对话任务。联调用，没有鉴权——测完就把服务停掉。"""
-    task_id = trtc.start(
-        req.room,
-        llm_api_url=f"{PUBLIC_URL}/voicekit/v1/chat/completions",
-        llm_api_key=API_KEY,
-        llm_model=MODEL,
-        system_prompt=SYSTEM_PROMPT,
-        target_user_id=req.user,
-        bot_user_id=f"bot-{req.room}",
-        welcome_message="你好呀，我是球球！今天想聊点什么？",
-        max_idle_time=120,
-    )
-    return {"task_id": task_id, "sdkappid": SDKAPPID,
+    """发 UserSig 并起 AI 对话任务。联调用，没有鉴权——测完就把服务停掉。
+
+    两个踩过的坑（2026-09-05 实测）：
+
+    1. **机器人 userId 不能按房间号写死**。之前写的是 `bot-{room}`，
+       于是同一个房间重试必撞 `FailedOperation.TaskExist:
+       robot userId repeat request in same room`。加随机后缀。
+    2. 上一次的任务可能还活着（MaxIdleTime 没到）。所以起新任务前
+       先把本进程记得的那个停掉——不然房间里会有两个机器人抢着说话。
+    """
+    from voice_kit.providers.base import ProviderError
+
+    old = LIVE_TASKS.pop(req.room, None)
+    if old:
+        try:
+            trtc.stop(old)
+        except Exception:
+            pass          # 它可能已经自己 idle 掉了，停不掉不是错
+
+    bot_id = f"bot-{uuid.uuid4().hex[:10]}"
+    try:
+        task_id = trtc.start(
+            req.room,
+            llm_api_url=f"{PUBLIC_URL}/voicekit/v1/chat/completions",
+            llm_api_key=API_KEY,
+            llm_model=MODEL,
+            system_prompt=SYSTEM_PROMPT,
+            target_user_id=req.user,
+            bot_user_id=bot_id,
+            welcome_message="你好呀，我是球球！今天想聊点什么？",
+            max_idle_time=120,
+        )
+    except ProviderError as e:
+        # 把腾讯的错误码原样透出去。探针页最怕的就是"HTTP 500"这种
+        # 什么都不说的失败——排查全靠猜。
+        raise HTTPException(502, str(e))
+
+    LIVE_TASKS[req.room] = task_id
+    return {"task_id": task_id, "sdkappid": SDKAPPID, "bot": bot_id,
             "user_sig": trtc.user_sig(req.user, expire=7200)}
 
 
 @app.post("/voicekit/api/stop")
 def stop_session(body: dict):
-    trtc.stop(body["task_id"])
+    from voice_kit.providers.base import ProviderError
+    tid = body.get("task_id")
+    for room, t in list(LIVE_TASKS.items()):
+        if t == tid:
+            LIVE_TASKS.pop(room, None)
+    try:
+        trtc.stop(tid)
+    except ProviderError as e:
+        return {"ok": False, "note": str(e)}    # 已经结束了也算停成功
     return {"ok": True}
 
 
