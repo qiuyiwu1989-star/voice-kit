@@ -29,6 +29,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))      # qiuqiu_bridge
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
@@ -116,14 +117,73 @@ def healthz():
     return {"ok": True, "model": MODEL, "sdkappid": SDKAPPID, "turns": len(TURNS)}
 
 
+# ---------------------------------------------------------------- 真实球球老师桥接
+#
+# QIUQIU_BRIDGE=1 时，X-User-Id 是一个 child_id，就走球球老师**真实的**引导
+# （8 铁律 / 年龄分档 / 这个孩子的记忆 / safety.py），只把 LLM 换成 deepseek。
+# 不开的话走上面那份简化配置，只够验证"链路通不通"。
+
+BRIDGE = None
+if os.environ.get("QIUQIU_BRIDGE") == "1":
+    try:
+        from qiuqiu_bridge import QiuqiuBridge
+        BRIDGE = QiuqiuBridge(llm, model=MODEL)
+    except Exception as e:      # 桥接挂了不能让整个探针起不来
+        print(f"[warn] 球球老师桥接加载失败，回落到简化配置: {e}", file=sys.stderr)
+
+
+def _bridge_stream(child_id, user_text: str, model: str):
+    """把桥接的事件转成 OpenAI SSE。"""
+    from voice_kit.openai_server import _chunk, _sse
+    cid = "chatcmpl-" + uuid.uuid4().hex[:24]
+    t0 = time.perf_counter()
+    first = None
+    reply = ""
+    took_over = False
+    gated = False
+    for ev in BRIDGE.respond(child_id, user_text):
+        if first is None:
+            first = round((time.perf_counter() - t0) * 1000, 1)
+        took_over |= ev["kind"] == "takeover"
+        gated |= ev["kind"] == "correction"
+        reply += ev["text"]
+        yield _sse(_chunk(cid, model, ev["text"]))
+    yield _sse(_chunk(cid, model, None, "stop"))
+    yield b"data: [DONE]\n\n"
+    TURNS.append({"t": time.strftime("%H:%M:%S"), "user": user_text, "reply": reply,
+                  "took_over": took_over, "rule": "red_trigger" if took_over else None,
+                  "gated": gated, "first_token_ms": first,
+                  "total_ms": round((time.perf_counter() - t0) * 1000, 1),
+                  "trtc_user": str(child_id), "task": "bridge", "bridge": True})
+    del TURNS[:-50]
+
+
 @app.post("/voicekit/v1/chat/completions")
 async def chat_completions(request: Request):
     """TRTC 会打到这里。每个 token 都过闸门才允许被合成成声音。"""
     if request.headers.get("authorization") != f"Bearer {API_KEY}":
         raise HTTPException(401, "bad api key")
     body = await request.json()
+    headers = {k.lower(): v for k, v in request.headers.items()}
+
+    if BRIDGE is not None:
+        uid = headers.get("x-user-id", "")
+        try:
+            child_id = BRIDGE.resolve_child(uid)
+        except PermissionError as e:
+            raise HTTPException(403, str(e))      # 真实孩子：硬拒
+        except ValueError:
+            child_id = None                       # 不是 child_id：走简化配置
+        if child_id is not None:
+            user_text = next((m.get("content", "") for m in reversed(body.get("messages") or [])
+                              if m.get("role") == "user"), "")
+            return StreamingResponse(
+                _bridge_stream(child_id, user_text, body.get("model") or MODEL),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
     return StreamingResponse(
-        handler.complete(body, dict(request.headers)),
+        handler.complete(body, headers),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
