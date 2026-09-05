@@ -55,13 +55,17 @@
 
   <div class="card">
     <label>房间号</label><input id="room" value="qq-test-1">
-    <label>你的身份（TRTC userId）</label><input id="user" value="child-demo">
+    <label>你的身份（TRTC userId）—— 填 child_id 才会走真实的球球老师</label>
+    <input id="user" value="983d85da-fa48-402f-8d0d-52e2e2ec5974">
     <div class="row">
       <button id="go">开始对话</button>
       <button id="end" class="stop" disabled>结束</button>
       <span class="dot" id="dot"></span><span id="state" class="sub" style="margin:0">未连接</span>
     </div>
-    <div class="hint">首次会请求麦克风权限。微信里打开需 iOS 14.3+。</div>
+    <div class="hint">首次会请求麦克风权限。微信里打开需 iOS 14.3+。<br>
+      上面填的是测试孩子「球」的 child_id：走 8 铁律 + 他的真实记忆。
+      填 <code>child-demo</code> 这类非 UUID 会回落到简化配置——
+      <b>那条路没有记忆，球球会编</b>（比如凭空说起"你的小仓鼠"）。</div>
   </div>
 
   <div class="card">
@@ -86,7 +90,7 @@
 <script src="https://web.sdk.qcloud.com/trtc/webrtc/v5/dist/trtc.js"></script>
 <script>
 const $ = id => document.getElementById(id);
-let trtc = null, taskId = null, poll = null;
+let trtc = null, taskId = null, poll = null, audioSeen = false;
 let lastUserFinalAt = 0, awaitingBot = false;
 
 function setState(t, on){ $('state').textContent = t; $('dot').classList.toggle('on', !!on); }
@@ -169,7 +173,12 @@ $('go').onclick = async () => {
   $('go').disabled = true;
   setState('正在起任务…');
   try{
-    const room = $('room').value.trim(), user = $('user').value.trim();
+    // 每次都用一个新房间号。原因：任务停不掉的时候（TaskId 丢了就没法停，
+    // 只能等 idle 超时）旧房间会一直被占，而换个房间是零成本的。
+    const base = ($('room').value.trim() || 'qq').replace(/-\w{4}$/, '');
+    const room = base + '-' + Math.random().toString(36).slice(2, 6);
+    $('room').value = room;
+    const user = $('user').value.trim();
     const r = await fetch('/voicekit/api/session', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({room, user})
@@ -187,6 +196,19 @@ $('go').onclick = async () => {
     trtc = TRTC.create();
     trtc.on(TRTC.EVENT.CUSTOM_MESSAGE, onCustomMessage);
     trtc.on(TRTC.EVENT.ERROR, e => setState('错误：' + e.message));
+
+    // 没声音时最难判断的是"到底哪一环断了"：TTS 没合成？音频流没来？
+    // 还是浏览器把自动播放挡了？三种情况现象一模一样（就是没声音），
+    // 所以这里把三者分开报出来。
+    trtc.on(TRTC.EVENT.REMOTE_AUDIO_AVAILABLE, ev => {
+      audioSeen = true;
+      flag('✅ 收到球球的音频流（userId=' + ev.userId + '）—— TTS 是通的');
+    });
+    trtc.on(TRTC.EVENT.AUTOPLAY_FAILED, async ev => {
+      flag('⚠️ 浏览器挡了自动播放。点这条消息一下就能听见。', true);
+      $('log').lastElementChild.style.cursor = 'pointer';
+      $('log').lastElementChild.onclick = () => { try { ev.resume(); } catch(e){} };
+    });
     await trtc.enterRoom({
       sdkAppId: s.sdkappid, userId: user, userSig: s.user_sig,
       roomId: undefined, strRoomId: room
@@ -194,6 +216,12 @@ $('go').onclick = async () => {
     await trtc.startLocalAudio();
     setState('已连接，说话吧', true);
     $('end').disabled = false;
+    audioSeen = false;
+    setTimeout(() => {
+      if (!audioSeen) flag('❌ 进房 12 秒还没收到球球的音频流 —— TTS 那一段没通'
+        + '（最常见的原因是 TTSConfig.AppId 传成了 TRTC 的 SdkAppId，'
+        + '应该用腾讯云账号 APPID）。文字照常，所以只看聊天记录看不出来。', true);
+    }, 12000);
     poll = setInterval(refreshTurns, 1200);
   }catch(e){
     setState('失败：' + (e && e.message || e));
@@ -213,6 +241,15 @@ $('end').onclick = async () => {
   $('go').disabled = false;
   refreshTurns();
 };
+
+// 直接关页面时也要收尾。不收的话任务会一直跑到 idle 超时，期间一直计费，
+// 而且我们这边的 TaskId 一丢就再也停不掉了（Stop 只认 TaskId）。
+window.addEventListener('pagehide', () => {
+  if (taskId && navigator.sendBeacon){
+    navigator.sendBeacon('/voicekit/api/stop',
+      new Blob([JSON.stringify({task_id: taskId})], {type:'application/json'}));
+  }
+});
 </script>
 </body>
 </html>

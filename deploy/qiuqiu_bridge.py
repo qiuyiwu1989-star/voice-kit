@@ -155,9 +155,17 @@ class QiuqiuBridge:
 
         # ③ 流式 + 闸门。逻辑照抄生产版，但去掉 correction ——
         #    语音里说出口就收不回，不假装能撤回。
+        # cache_key 用 child_id：这个孩子的 38k 字 system prompt 跨轮跨会话
+        # 一字不变，正是前缀缓存最理想的形状。用 session_id 当 cache_key 是错的
+        # ——每开一次新会话缓存就作废，等于没开。
+        # thinking=False 是语音场景最大的杠杆：实测首字 3726→1387ms（−63%）。
+        # 球球老师自己的代码里本来就有 `_thinking_off(call_mode)` 做这件事
+        # （给 MiMo 用的 extra_body），这里是同一个决定换到 OpenAI 协议上。
         buffer, flushed = "", 0
         for tok in self.llm.stream(_to_openai(messages), system=full_system,
-                                   model=self.model):
+                                   model=self.model, thinking=False,
+                                   cache_key=f"child-{child_id}",
+                                   session_id=str(session_id)):
             buffer += tok
             m = qq_agent._INTERNAL_MARKER_RE.search(buffer)
             if m:

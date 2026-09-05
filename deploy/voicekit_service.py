@@ -89,8 +89,14 @@ CONFIG = VoiceConfig(
         "我听到了……这件事听起来不容易。你愿意多跟我说一点吗？"),
 )
 
-llm = TokenHubLLM(TOKENHUB_KEY, model=MODEL)
-trtc = TRTCConversation(TC_SECRET_ID, TC_SECRET_KEY, SDKAPPID, SDKSECRETKEY)
+# thinking=False：语音场景最大的杠杆，实测首字 3726→1387ms（−63%）。
+# 用户在等着听声音，不是在等模型想。
+llm = TokenHubLLM(TOKENHUB_KEY, model=MODEL, thinking=False)
+# TENCENT_APPID 是腾讯云**账号** APPID（13 开头那串，COS 域名里能看到），
+# TTS 要它；跟 TRTC 的 SdkAppId 完全是两个东西，传错了就是"有字没声"。
+TTS_APPID = int(os.environ.get("TENCENT_APPID") or 0) or None
+trtc = TRTCConversation(TC_SECRET_ID, TC_SECRET_KEY, SDKAPPID, SDKSECRETKEY,
+                        tts_app_id=TTS_APPID)
 
 # 联调期把每轮都留在内存里，页面能直接看到闸门做了什么
 TURNS = []

@@ -79,7 +79,7 @@ class TRTCConversation:
 
     def __init__(self, secret_id: str, secret_key: str, sdk_app_id: int,
                  sdk_secret_key: str, *, region: str = "ap-guangzhou",
-                 timeout: float = 30.0):
+                 tts_app_id: Optional[int] = None, timeout: float = 30.0):
         if not (secret_id and secret_key and sdk_app_id and sdk_secret_key):
             raise ValueError("TRTCConversation 需要 secret_id / secret_key / "
                              "sdk_app_id / sdk_secret_key（后者是 SDKSecretKey，"
@@ -88,6 +88,9 @@ class TRTCConversation:
         self.secret_key = secret_key
         self.sdk_app_id = int(sdk_app_id)
         self.sdk_secret_key = sdk_secret_key
+        # 腾讯云账号 APPID，给 TTS 用。跟 sdk_app_id 是两个东西——
+        # 不传就回落到 sdk_app_id，但那多半是错的（回落只是为了别硬崩）。
+        self.tts_app_id = int(tts_app_id) if tts_app_id else None
         self.region = region
         self._http = httpx.Client(timeout=httpx.Timeout(timeout, connect=10.0))
 
@@ -173,12 +176,19 @@ class TRTCConversation:
                 "Streaming": True,                # 语音场景没有第二个选项
                 "SystemPrompt": system_prompt,
             }),
+            # ⚠️ TTSConfig.AppId 是**腾讯云账号 APPID**（那串 13 开头的数字，
+            # 在 COS 域名里就能看到），**不是 TRTC 的 SdkAppId**，而且是 int 不是 str。
+            # 传错了任务照样起得来、文字照样出，就是**一点声音都没有**——
+            # 没有任何报错，最难查的一类故障。
             "TTSConfig": json.dumps({
                 "TTSType": "tencent",
-                "AppId": str(self.sdk_app_id),
+                "AppId": int(self.tts_app_id or self.sdk_app_id),
                 "SecretId": tts_secret_id or self.secret_id,
                 "SecretKey": tts_secret_key or self.secret_key,
                 "VoiceType": tts_voice,
+                "Volume": 5,
+                "Speed": 1.0,
+                "PrimaryLanguage": 1,
             }),
         }
         if session_id:
