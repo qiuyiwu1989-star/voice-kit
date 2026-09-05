@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>voice-kit · TRTC 联调</title>
+<style>
+  :root{
+    --bg:#faf9f7; --card:#fff; --ink:#1f2328; --dim:#6b7280; --line:#e5e3df;
+    --me:#e8f2ff; --bot:#f3f0ff; --warn:#fff4e5; --bad:#ffeaea; --ok:#0a7c42;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#16181c; --card:#1e2126; --ink:#e8eaed; --dim:#9aa0a6; --line:#2e3238;
+           --me:#1c2b3f; --bot:#2a2340; --warn:#3a2f1c; --bad:#3d2323; --ok:#4ade80; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:680px;margin:0 auto;padding:16px 14px 40px}
+  h1{font-size:17px;margin:0 0 2px}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+        padding:14px;margin-bottom:12px}
+  label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
+  input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+        background:var(--bg);color:var(--ink);font-size:15px;margin-bottom:10px}
+  button{padding:11px 18px;border:0;border-radius:9px;font-size:15px;font-weight:600;
+         cursor:pointer;background:#2563eb;color:#fff}
+  button.stop{background:#b42318}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  .m{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .m b{display:block;font-size:21px;font-variant-numeric:tabular-nums;line-height:1.25}
+  .m span{font-size:11px;color:var(--dim)}
+  .msg{padding:9px 12px;border-radius:10px;margin:7px 0;white-space:pre-wrap;
+       word-break:break-word;font-size:14px}
+  .msg.me{background:var(--me)} .msg.bot{background:var(--bot)}
+  .msg .who{font-size:11px;color:var(--dim);display:block;margin-bottom:2px}
+  .flag{background:var(--warn);border-left:3px solid #d97706;padding:8px 11px;
+        border-radius:0 8px 8px 0;margin:7px 0;font-size:13px}
+  .flag.red{background:var(--bad);border-left-color:#b42318}
+  pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px;
+      font-size:11px;overflow-x:auto;max-height:190px;margin:0;color:var(--dim)}
+  .hint{font-size:12px;color:var(--dim);margin-top:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#9ca3af;display:inline-block}
+  .dot.on{background:var(--ok)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>voice-kit · TRTC 对话式 AI 联调</h1>
+  <div class="sub">编排走腾讯，LLM 回调到我们自己带闸门的端点。这是探针页，不是产品。</div>
+
+  <div class="card">
+    <label>房间号</label><input id="room" value="qq-test-1">
+    <label>你的身份（TRTC userId）</label><input id="user" value="child-demo">
+    <div class="row">
+      <button id="go">开始对话</button>
+      <button id="end" class="stop" disabled>结束</button>
+      <span class="dot" id="dot"></span><span id="state" class="sub" style="margin:0">未连接</span>
+    </div>
+    <div class="hint">首次会请求麦克风权限。微信里打开需 iOS 14.3+。</div>
+  </div>
+
+  <div class="card">
+    <div class="metrics">
+      <div class="m"><b id="mAsr">—</b><span>你说完 → 球球第一个字</span></div>
+      <div class="m"><b id="mLlm">—</b><span>其中 LLM 首字（服务端实测）</span></div>
+      <div class="m"><b id="mTurns">0</b><span>轮次</span></div>
+      <div class="m"><b id="mGate">0</b><span>闸门拦下</span></div>
+    </div>
+    <div class="hint">第一格是体感延迟。第二格是它里面属于 LLM 的部分——
+      官方宣传的「1s」不含这一段。</div>
+  </div>
+
+  <div class="card" id="log"><div class="sub" style="margin:0">还没有对话</div></div>
+
+  <div class="card">
+    <label>服务端看到的每一轮（闸门做了什么）</label>
+    <pre id="turns">—</pre>
+  </div>
+</div>
+
+<script src="https://web.sdk.qcloud.com/trtc/webrtc/v5/dist/trtc.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let trtc = null, taskId = null, poll = null;
+let lastUserFinalAt = 0, awaitingBot = false;
+
+function setState(t, on){ $('state').textContent = t; $('dot').classList.toggle('on', !!on); }
+
+function add(cls, who, text){
+  if ($('log').querySelector('.sub')) $('log').innerHTML = '';
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.innerHTML = '<span class="who"></span>';
+  d.querySelector('.who').textContent = who;
+  d.appendChild(document.createTextNode(text));
+  $('log').appendChild(d);
+  $('log').scrollTop = $('log').scrollHeight;
+  return d;
+}
+
+function flag(text, red){
+  const d = document.createElement('div');
+  d.className = 'flag' + (red ? ' red' : '');
+  d.textContent = text;
+  $('log').appendChild(d);
+}
+
+// TRTC 把字幕/转录当自定义消息发过来。字段名各版本略有出入，所以宽松解析：
+// 认不出来的原样丢进 turns 面板，别悄悄吞掉。
+function onCustomMessage(ev){
+  let obj;
+  try { obj = JSON.parse(new TextDecoder().decode(ev.data)); } catch(e){ return; }
+  const p = obj.payload || obj;
+  const text = p.text || p.Text || '';
+  const done = p.end === true || p.end === 1 || p.is_final === true;
+  if (!text) return;
+
+  const fromBot = String(obj.sender || p.sender || '').startsWith('bot-');
+  if (fromBot){
+    if (awaitingBot && lastUserFinalAt){
+      $('mAsr').textContent = Math.round(performance.now() - lastUserFinalAt) + 'ms';
+      awaitingBot = false;
+    }
+    let last = $('log').lastElementChild;
+    if (last && last.classList.contains('bot') && last.dataset.live === '1'){
+      last.childNodes[1].nodeValue = text;
+    } else {
+      last = add('bot', '球球', text); last.dataset.live = '1';
+    }
+    if (done) last.dataset.live = '0';
+  } else {
+    let last = $('log').lastElementChild;
+    if (last && last.classList.contains('me') && last.dataset.live === '1'){
+      last.childNodes[1].nodeValue = text;
+    } else {
+      last = add('me', '你', text); last.dataset.live = '1';
+    }
+    if (done){
+      last.dataset.live = '0';
+      lastUserFinalAt = performance.now();   // 定稿这一刻起算体感延迟
+      awaitingBot = true;
+    }
+  }
+}
+
+async function refreshTurns(){
+  try{
+    const r = await fetch('/voicekit/api/turns');
+    const d = await r.json();
+    $('turns').textContent = d.turns.length
+      ? JSON.stringify(d.turns.slice(-6), null, 1) : '—';
+    $('mTurns').textContent = d.turns.length;
+    $('mGate').textContent = d.turns.filter(t => t.gated || t.took_over).length;
+    const last = d.turns[d.turns.length - 1];
+    if (last && last.first_token_ms) $('mLlm').textContent = Math.round(last.first_token_ms) + 'ms';
+    if (last && last.took_over && !last._shown){
+      last._shown = 1;
+      flag('输入闸门接管：' + last.rule + '（这一轮没有调用 LLM）', true);
+    }
+  }catch(e){}
+}
+
+$('go').onclick = async () => {
+  $('go').disabled = true;
+  setState('正在起任务…');
+  try{
+    const room = $('room').value.trim(), user = $('user').value.trim();
+    const r = await fetch('/voicekit/api/session', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({room, user})
+    });
+    if (!r.ok) throw new Error('起任务失败 HTTP ' + r.status + ' ' + await r.text());
+    const s = await r.json();
+    taskId = s.task_id;
+
+    trtc = TRTC.create();
+    trtc.on(TRTC.EVENT.CUSTOM_MESSAGE, onCustomMessage);
+    trtc.on(TRTC.EVENT.ERROR, e => setState('错误：' + e.message));
+    await trtc.enterRoom({
+      sdkAppId: s.sdkappid, userId: user, userSig: s.user_sig,
+      roomId: undefined, strRoomId: room
+    });
+    await trtc.startLocalAudio();
+    setState('已连接，说话吧', true);
+    $('end').disabled = false;
+    poll = setInterval(refreshTurns, 1200);
+  }catch(e){
+    setState('失败：' + (e && e.message || e));
+    $('go').disabled = false;
+  }
+};
+
+$('end').onclick = async () => {
+  $('end').disabled = true;
+  clearInterval(poll);
+  try { if (trtc) { await trtc.stopLocalAudio(); await trtc.exitRoom(); trtc.destroy(); } } catch(e){}
+  try { if (taskId) await fetch('/voicekit/api/stop', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({task_id: taskId}) }); } catch(e){}
+  trtc = null; taskId = null;
+  setState('已结束');
+  $('go').disabled = false;
+  refreshTurns();
+};
+</script>
+</body>
+</html>
