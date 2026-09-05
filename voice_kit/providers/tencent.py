@@ -213,13 +213,10 @@ class TencentProvider:
 
     # ---------------------------------------------------------------- TTS
 
-    def stream_tts(self, text: str, *, voice: Optional[int] = None, **kw) -> Iterator[bytes]:
-        """语音合成。腾讯云 API 3.0 的 TextToVoice 是一次性返回 base64，
-        不是真流式——所以这里只能一次性 yield，首块 == 全程。
+    def synthesize(self, text: str, *, voice: Optional[int] = None, **kw) -> bytes:
+        """一次性合成（云 API 3.0 TextToVoice，返回完整 WAV）。
 
-        真要流式 TTS 得走 tts.cloud.tencent.com 的 WebSocket；
-        但实测那个端点 148ms 首字节，并不比 MiMo 快，而 MiMo 的 TTS 首块
-        实测 674ms 已经不是瓶颈——所以先不做，别为了统一而统一。
+        保留它有两个用处：流式连不上时降级，以及做流式的对照组。
         """
         d = self._call("tts.tencentcloudapi.com", "tts", "TextToVoice", "2019-08-23", {
             "Text": text[:1000],
@@ -228,9 +225,88 @@ class TencentProvider:
             "Codec": "wav",
             "SampleRate": self.sample_rate,
         })
-        audio = base64.b64decode(d.get("Audio", ""))
-        if audio:
-            yield audio
+        return base64.b64decode(d.get("Audio", ""))
+
+    def _stream_tts_url(self, text: str, voice: int, session_id: str,
+                        codec: str) -> str:
+        """实时语音合成的 WebSocket 地址。
+
+        ⚠️ 跟实时 ASR 同属 HMAC-SHA1 家族，但**签名串多了一个 "GET" 前缀**，
+        而且 Text 要参与签名。两处都很容易抄错：
+            ASR:  asr.cloud.tencent.com/asr/v2/<appid>?<sorted qs>
+            TTS:  GETtts.cloud.tencent.com/stream_ws?<sorted qs>
+                  ^^^ 就是这三个字母
+
+        另一个坑：**签名用的是未编码的原始参数值**（中文 Text 原样参与），
+        而拼进最终 URL 时才做 urlencode。先编码再签会 401。
+        """
+        now = int(time.time())
+        params = {
+            "Action": "TextToStreamAudioWS",
+            "AppId": self.app_id,
+            "SecretId": self.secret_id,
+            "Timestamp": str(now),
+            "Expired": str(now + 86400),
+            "SessionId": session_id,
+            "Text": text,
+            "VoiceType": str(voice),
+            "Codec": codec,
+            "SampleRate": str(self.sample_rate),
+            "Volume": "0",
+            "Speed": "0",
+        }
+        qs = "&".join(f"{k}={params[k]}" for k in sorted(params))
+        sig = base64.b64encode(
+            hmac.new(self.secret_key.encode(),
+                     f"GETtts.cloud.tencent.com/stream_ws?{qs}".encode(),
+                     hashlib.sha1).digest()
+        ).decode()
+        encoded = "&".join(f"{k}={urllib.parse.quote(params[k], safe='')}"
+                           for k in sorted(params))
+        return (f"wss://tts.cloud.tencent.com/stream_ws?{encoded}"
+                f"&Signature={urllib.parse.quote(sig, safe='')}")
+
+    def stream_tts(self, text: str, *, voice: Optional[int] = None,
+                   codec: str = "pcm", **kw) -> Iterator[bytes]:
+        """流式合成：边合成边吐音频块，首块不用等整句合完。
+
+        为什么值得做（之前判断"先不做"是错的）：一次性合成的耗时随文本长度
+        线性增长，跟一次性 ASR 是同一个毛病。球球老师的回复经常是两三句话，
+        整句合完再播 = 用户干等。流式的首块与后文长度无关。
+
+        默认 `codec="pcm"`——裸 PCM16 可以直接往播放器里灌，不用等 WAV 头。
+        要落盘或走 `<audio>` 传 `codec="mp3"`。
+
+        连不上就抛 ProviderError，由调用方决定降级到 `synthesize()`；
+        这里**不自动降级**，否则一次静默的性能回退可能几个月都发现不了。
+        """
+        try:
+            from websockets.sync.client import connect
+        except ImportError as e:      # pragma: no cover - 环境问题不进测试
+            raise ProviderError(self.name,
+                                "流式 TTS 需要 websockets>=13：pip install websockets") from e
+
+        url = self._stream_tts_url(text, voice or self.tts_voice,
+                                   f"vk{int(time.time()*1000)}", codec)
+        try:
+            with connect(url, open_timeout=10, close_timeout=5) as ws:
+                while True:
+                    msg = ws.recv()
+                    if isinstance(msg, bytes):
+                        if msg:
+                            yield msg
+                        continue
+                    # 文本帧只有两种：出错，或者结束标记
+                    d = json.loads(msg)
+                    if d.get("code"):
+                        raise ProviderError(
+                            self.name, f"流式 TTS {d['code']}: {d.get('message')}")
+                    if d.get("final"):
+                        break
+        except ProviderError:
+            raise
+        except Exception as e:
+            raise ProviderError(self.name, f"流式 TTS 失败: {e}") from e
 
     # 跟 MimoProvider 的 stream() 同名同义，方便互换
     stream_synthesize = stream_tts
