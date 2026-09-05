@@ -33,6 +33,7 @@ voice_kit/
   providers/          # 能力抽象：ASR / StreamingASR / TTS 各自独立可换
     base.py           # 接口 + ASRResult（自带 realtime_factor）
     mimo.py           # 小米 MiMo（ASR+TTS 同网关），生产验证过
+    tencent.py        # 腾讯云：实时流式 ASR（WebSocket）+ 一句话识别 + TTS
   gate.py             # 输出闸门 + 输入闸门  ← 别人没有的那块
   credibility.py      # 可信度分层 + 诱导识别  ← 做儿童产品必须有
 ```
@@ -141,6 +142,7 @@ for ev in gate.filter(model_tokens(), low_latency=True):
 | TTS 整句 | 1063ms |
 | MiMo 网关 TLS 首字节 | 106~119ms |
 | 腾讯 ASR 云API（非流式） | 4609ms vs MiMo 4721ms —— **基本一样** |
+| 🔥 **腾讯实时流式 ASR** | **说完之后 89ms** —— 与说话长度无关 |
 
 **两个已被证伪的假设**（省得别人再走一遍）：
 
@@ -151,6 +153,23 @@ for ev in gate.filter(model_tokens(), low_latency=True):
 ✅ **真正的杠杆是「流式」这个架构本身，不是换谁。**
 MiMo 的 `stream=true` 是**文字流式输出**（音频仍要整段传完），实测首字节
 4679ms 反而比非流式全程 4246ms 更慢——对延迟零收益。
+
+### 流式 ASR 实测（2026-09，14.9 秒音频，按 200ms/帧实时喂）
+
+```
+[基线] MiMo 一次性      14211ms      倍速比 0.955
+[流式] 腾讯实时
+       首个中间结果     + 645ms
+       说完之后还要等      89ms      ← 用户真正感知的 ASR 延迟
+省 14122ms（99%）
+```
+
+对比是公平的：真实场景里一次性是「说完 → 上传 → 识别 → 才进 LLM」，
+流式是「边说边认 → 说完 89ms 就有结果」。
+
+**比省时更重要的是稳定**：一次性的倍速比在 0.56~0.955 之间大幅波动
+（音频越长、负载越高越慢），而流式的尾包延迟**与说话长度无关**，恒定 ~89ms。
+孩子说得越多，两者差距越大——而深度用户恰恰是说得最多的那批。
 
 ---
 
@@ -169,6 +188,6 @@ python -m pytest tests/ -q
 - ✅ provider 抽象 + MiMo 实现（生产验证：WAV 拼接 RIFF 头=1，ASR 倍速比 0.559）
 - ✅ 输出/输入闸门（含变异验证）
 - ✅ 可信度分层 + 诱导识别（26 例测试全过）
-- ⬜ 腾讯 provider（流式 WebSocket，缺 AppId）
+- ✅ 腾讯 provider：实时流式 ASR（**实测说完 89ms 出结果，省 99%**）+ 一句话识别 + TTS
 - ⬜ 客户端编排（VAD / 抢跑 / 句级流式 / 打断）从球球老师抽取
 - ⬜ 球球老师切到 voice-kit（**在它稳定前不要动生产代码**）
