@@ -46,6 +46,12 @@
   .hint{font-size:12px;color:var(--dim);margin-top:8px}
   .dot{width:8px;height:8px;border-radius:50%;background:#9ca3af;display:inline-block}
   .dot.on{background:var(--ok)}
+  select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+         background:var(--bg);color:var(--ink);font-size:15px;margin-bottom:10px}
+  .vu{height:6px;border-radius:3px;background:var(--line);overflow:hidden;
+      margin:8px 0 2px}
+  .vu i{display:block;height:100%;width:0;background:var(--ok);
+        transition:width .12s linear}
 </style>
 </head>
 <body>
@@ -57,6 +63,8 @@
     <label>房间号</label><input id="room" value="qq-test-1">
     <label>你的身份（TRTC userId）—— 填 child_id 才会走真实的球球老师</label>
     <input id="user" value="983d85da-fa48-402f-8d0d-52e2e2ec5974">
+    <label>球球的声音（换了之后点「开始对话」生效）</label>
+    <select id="voice"><option value="">加载中…</option></select>
     <div class="row">
       <button id="go">开始对话</button>
       <button id="end" class="stop" disabled>结束</button>
@@ -75,6 +83,8 @@
       <div class="m"><b id="mTurns">0</b><span>轮次</span></div>
       <div class="m"><b id="mGate">0</b><span>闸门拦下</span></div>
     </div>
+    <div class="vu"><i id="vu"></i></div>
+    <div class="hint" id="vuHint">球球的实时音量 —— 有跳动就说明 TTS 真的出声了</div>
     <div class="hint">第一格是体感延迟。第二格是它里面属于 LLM 的部分——
       官方宣传的「1s」不含这一段。</div>
   </div>
@@ -169,6 +179,29 @@ async function refreshTurns(){
   }catch(e){}
 }
 
+(async () => {
+  try{
+    const d = await (await fetch('/voicekit/api/voices')).json();
+    const sel = $('voice');
+    sel.innerHTML = '';
+    const short = new Set(d.shortlist);
+    const mk = (list, label) => {
+      if (!list.length) return;
+      const g = document.createElement('optgroup'); g.label = label;
+      list.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v.id;
+        o.textContent = `${v.name}（${v.gender}·${v.tier}）${v.note ? ' — ' + v.note : ''}`;
+        if (v.id === d.default) o.selected = true;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    };
+    mk(d.voices.filter(v => short.has(v.id)), '给球球老师挑的（大朋友感）');
+    mk(d.voices.filter(v => !short.has(v.id)), '其余全部');
+  }catch(e){ $('voice').innerHTML = '<option value="">音色列表加载失败</option>'; }
+})();
+
 $('go').onclick = async () => {
   $('go').disabled = true;
   setState('正在起任务…');
@@ -181,7 +214,7 @@ $('go').onclick = async () => {
     const user = $('user').value.trim();
     const r = await fetch('/voicekit/api/session', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({room, user})
+      body: JSON.stringify({room, user, voice: Number($('voice').value) || null})
     });
     if (!r.ok){
       // 把服务端透出来的腾讯错误码显示全。之前这里只显示 "HTTP 500"，
@@ -200,10 +233,22 @@ $('go').onclick = async () => {
     // 没声音时最难判断的是"到底哪一环断了"：TTS 没合成？音频流没来？
     // 还是浏览器把自动播放挡了？三种情况现象一模一样（就是没声音），
     // 所以这里把三者分开报出来。
-    trtc.on(TRTC.EVENT.REMOTE_AUDIO_AVAILABLE, ev => {
-      audioSeen = true;
-      flag('✅ 收到球球的音频流（userId=' + ev.userId + '）—— TTS 是通的');
+    // ⚠️ 不要只监听 REMOTE_AUDIO_AVAILABLE。2026-09-05 实拍：声音明明出来了，
+    // 这个事件却没触发，于是页面报了个"TTS 没通"的假警——比不做诊断更糟，
+    // 它在骗人。AUDIO_VOLUME 是**真实音量**，出声才有值，骗不了。
+    trtc.enableAudioVolumeEvaluation(200);
+    trtc.on(TRTC.EVENT.AUDIO_VOLUME, ev => {
+      let remote = 0;
+      (ev.result || []).forEach(r => {
+        if (r.userId && r.userId !== $('user').value.trim()) remote = Math.max(remote, r.volume || 0);
+      });
+      $('vu').style.width = Math.min(100, remote) + '%';
+      if (remote > 2 && !audioSeen){
+        audioSeen = true;
+        $('vuHint').textContent = '✅ 听到球球出声了（音量 ' + remote + '）—— TTS 链路通';
+      }
     });
+    trtc.on(TRTC.EVENT.REMOTE_AUDIO_AVAILABLE, () => { audioSeen = audioSeen || null; });
     trtc.on(TRTC.EVENT.AUTOPLAY_FAILED, async ev => {
       flag('⚠️ 浏览器挡了自动播放。点这条消息一下就能听见。', true);
       $('log').lastElementChild.style.cursor = 'pointer';
@@ -218,9 +263,9 @@ $('go').onclick = async () => {
     $('end').disabled = false;
     audioSeen = false;
     setTimeout(() => {
-      if (!audioSeen) flag('❌ 进房 12 秒还没收到球球的音频流 —— TTS 那一段没通'
-        + '（最常见的原因是 TTSConfig.AppId 传成了 TRTC 的 SdkAppId，'
-        + '应该用腾讯云账号 APPID）。文字照常，所以只看聊天记录看不出来。', true);
+      if (audioSeen !== true) flag('⚠️ 进房 12 秒没测到球球的音量。'
+        + '如果你其实听得见，那是这条诊断的问题，不是 TTS 的问题；'
+        + '如果确实听不见，先看上面的音量条有没有跳——不跳才说明 TTS 那段没通。', true);
     }, 12000);
     poll = setInterval(refreshTurns, 1200);
   }catch(e){

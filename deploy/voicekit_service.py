@@ -27,6 +27,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))      # qiuqiu_bridge
@@ -95,6 +96,10 @@ llm = TokenHubLLM(TOKENHUB_KEY, model=MODEL, thinking=False)
 # TENCENT_APPID 是腾讯云**账号** APPID（13 开头那串，COS 域名里能看到），
 # TTS 要它；跟 TRTC 的 SdkAppId 完全是两个东西，传错了就是"有字没声"。
 TTS_APPID = int(os.environ.get("TENCENT_APPID") or 0) or None
+# 默认音色。101016 是「智甜·女童」——2026-09-05 联调时孩子第二句话就问
+# "你为什么是这个声音"。球球老师的人设是"好奇的大朋友"，用同龄童声
+# 等于自我矛盾。改成 502001「智小柔·超自然聊天女声」。见 voice_kit/voices.py。
+DEFAULT_VOICE = int(os.environ.get("VOICEKIT_TTS_VOICE") or 502001)
 trtc = TRTCConversation(TC_SECRET_ID, TC_SECRET_KEY, SDKAPPID, SDKSECRETKEY,
                         tts_app_id=TTS_APPID)
 
@@ -197,6 +202,20 @@ async def chat_completions(request: Request):
 class SessionReq(BaseModel):
     room: str
     user: str
+    voice: Optional[int] = None      # TTS 音色，不传用默认
+
+
+@app.get("/voicekit/api/voices")
+def list_voices():
+    """音色库。文字描述跟实际听感差很远，所以页面要能当场 A/B。"""
+    from voice_kit import voices as V
+    return {
+        "default": DEFAULT_VOICE,
+        "shortlist": [v.id for v in V.shortlist()],
+        "voices": [{"id": v.id, "name": v.name, "gender": v.gender,
+                    "tier": v.tier, "scene": v.scene, "note": v.note}
+                   for v in V.ALL],
+    }
 
 
 # TaskId 必须落盘：StopAIConversation 只认 TaskId，而按 SessionId 查回来的
@@ -284,6 +303,7 @@ def start_session(req: SessionReq):
             target_user_id=req.user,
             bot_user_id=bot_id,
             welcome_message=welcome,
+            tts_voice=req.voice or DEFAULT_VOICE,
             max_idle_time=120,
             session_id=req.room,
         )

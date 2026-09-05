@@ -163,8 +163,9 @@ class QiuqiuBridge:
         topics = p.get("topics_explored") or []
         if isinstance(topics, str):
             topics = [topics]
-        if topics:
-            return (f"嘿，是你呀，我等你好久了～上次我们聊到{topics[-1]}，"
+        topic = _humanize_topic(topics[-1]) if topics else ""
+        if topic:
+            return (f"嘿，是你呀，我等你好久了～上次我们聊到{topic}，"
                     "我一直记着呢。今天想聊点啥？")
         return "嘿，是你呀，我等你好久了～今天想聊点啥？"
 
@@ -301,3 +302,21 @@ def _to_openai(messages) -> list:
             c = "".join(b.get("text", "") for b in c if isinstance(b, dict))
         out.append({"role": m.get("role", "user"), "content": c or ""})
     return out
+
+
+# 课程编码形如 "L1-22·折纸进阶挑战（龙到凤凰）"——那是给后台看的。
+# 2026-09-05 联调实拍：开场白把 "L1-22" 原样念给孩子听了。
+# 文字端还只是难看，语音端 TTS 会一个字母一个字母念出来，直接暴露系统黑话。
+_TOPIC_CODE = re.compile(r"^[A-Za-z]+\d*[-_]?\d*\s*[·:：\-]\s*")
+
+
+def _humanize_topic(raw: str) -> str:
+    """把话题串洗成能念出口的样子。洗不干净就返回空——
+    宁可说一句笼统的开场白，也不要念出内部编号。"""
+    if not raw:
+        return ""
+    t = _TOPIC_CODE.sub("", str(raw)).strip()
+    t = re.sub(r"[（(][^）)]*[）)]\s*$", "", t).strip()   # 去掉尾部括号补充说明
+    if not t or len(t) > 20 or re.search(r"[A-Za-z]{2,}\d", t):
+        return ""          # 还有编码残留就不用了
+    return t
