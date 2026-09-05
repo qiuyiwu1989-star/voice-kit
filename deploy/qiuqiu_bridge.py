@@ -247,27 +247,48 @@ class QiuqiuBridge:
         # thinking=False 是语音场景最大的杠杆：实测首字 3726→1387ms（−63%）。
         # 球球老师自己的代码里本来就有 `_thinking_off(call_mode)` 做这件事
         # （给 MiMo 用的 extra_body），这里是同一个决定换到 OpenAI 协议上。
-        buffer, flushed = "", 0
-        for tok in self.llm.stream(_to_openai(messages), system=full_system,
-                                   model=self.model, thinking=False,
-                                   cache_key=f"child-{child_id}",
-                                   session_id=str(session_id)):
-            buffer += tok
-            m = qq_agent._INTERNAL_MARKER_RE.search(buffer)
-            if m:
-                # 内部标记出现 = 给孩子看的正文到此为止。语音下尤其要紧：
-                # 漏出去就是 TTS 把 "[采样]" 念出来。
-                buffer = buffer[:m.start()]
-                flushed = min(flushed, len(buffer))
-                break
-            visible_end = len(buffer) - HOLDBACK
-            done_at = qq_agent._last_sentence_end(buffer)    # 通话模式：整句可提前下发
-            if done_at > visible_end:
-                visible_end = done_at
-            if visible_end > flushed and not qq_safety.check_output_violations(
-                    buffer[:visible_end]).has_violation:
-                yield {"kind": "delta", "text": buffer[flushed:visible_end]}
-                flushed = visible_end
+        buffer, flushed, llm_failed = "", 0, None
+        try:
+            stream = self.llm.stream(_to_openai(messages), system=full_system,
+                                     model=self.model, thinking=False,
+                                     cache_key=f"child-{child_id}",
+                                     session_id=str(session_id))
+            for tok in stream:
+                buffer += tok
+                m = qq_agent._INTERNAL_MARKER_RE.search(buffer)
+                if m:
+                    # 内部标记出现 = 给孩子看的正文到此为止。语音下尤其要紧：
+                    # 漏出去就是 TTS 把 "[采样]" 念出来。
+                    buffer = buffer[:m.start()]
+                    flushed = min(flushed, len(buffer))
+                    break
+                visible_end = len(buffer) - HOLDBACK
+                done_at = qq_agent._last_sentence_end(buffer)   # 通话模式：整句可提前下发
+                if done_at > visible_end:
+                    visible_end = done_at
+                if visible_end > flushed and not qq_safety.check_output_violations(
+                        buffer[:visible_end]).has_violation:
+                    yield {"kind": "delta", "text": buffer[flushed:visible_end]}
+                    flushed = visible_end
+        except Exception as e:
+            # LLM 挂了（额度用完、网关 402、连接断……）。**绝不能让流直接死**——
+            # 2026-09-05 实测过一次：TokenHub 免费额度耗尽返回 402，异常一路
+            # 抛穿 StreamingResponse，客户端拿到 incomplete chunked read，
+            # 孩子那边就是"话说一半突然静音"。比说错话更糟：孩子会以为是自己
+            # 说了什么不该说的。生产版 stream_message 有兜底，桥接漏了。
+            llm_failed = str(e)[:160]
+
+        if llm_failed and not buffer[:flushed].strip():
+            # 一个字都没来得及说 → 用一句听起来像"人卡了一下"的话兜住
+            reply = "嗯……我这边卡了一下，你刚才说的能再讲一遍吗？"
+            qq_db.save_turn(child_id=child_id, session_id=session_id,
+                            turn_index=next_idx + 1, speaker="bot", content=reply)
+            yield {"kind": "correction", "text": reply, "llm_error": llm_failed}
+            return
+        if llm_failed:
+            # 已经说了一半 → 接一句自然的收口，不要硬断
+            yield {"kind": "correction", "text": "……我这边卡了一下，你接着说？",
+                   "llm_error": llm_failed}
 
         tail = buffer[flushed:]
         if tail:

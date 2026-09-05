@@ -152,7 +152,9 @@ def _bridge_stream(child_id, user_text: str, model: str):
     reply = ""
     took_over = False
     gated = False
+    llm_error = None
     for ev in BRIDGE.respond(child_id, user_text):
+        llm_error = ev.get("llm_error") or llm_error
         if first is None:
             first = round((time.perf_counter() - t0) * 1000, 1)
         took_over |= ev["kind"] == "takeover"
@@ -163,7 +165,7 @@ def _bridge_stream(child_id, user_text: str, model: str):
     yield b"data: [DONE]\n\n"
     TURNS.append({"t": time.strftime("%H:%M:%S"), "user": user_text, "reply": reply,
                   "took_over": took_over, "rule": "red_trigger" if took_over else None,
-                  "gated": gated, "first_token_ms": first,
+                  "gated": gated, "llm_error": llm_error, "first_token_ms": first,
                   "total_ms": round((time.perf_counter() - t0) * 1000, 1),
                   "trtc_user": str(child_id), "task": "bridge", "bridge": True})
     del TURNS[:-50]

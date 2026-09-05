@@ -176,6 +176,12 @@ async function refreshTurns(){
       last._shown = 1;
       flag('输入闸门接管：' + last.rule + '（这一轮没有调用 LLM）', true);
     }
+    // LLM 挂掉在语音里表现为"话说一半静音"，看聊天记录完全看不出来，
+    // 必须显式报出来——否则会误以为是 TTS 或网络的问题。
+    if (last && last.llm_error && !last._errShown){
+      last._errShown = 1;
+      flag('❌ LLM 调用失败：' + String(last.llm_error).slice(0, 150), true);
+    }
   }catch(e){}
 }
 
