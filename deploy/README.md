@@ -46,20 +46,73 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 已测到的数字（2026-09-05）
 
+### 首字延迟：真正的杠杆是关思考，不是精简 prompt
+
+一开始我把慢归因给「38363 字的 system prompt」并建议精简。**归因错了**——
+那是从一组噪声很大的数据（4089/4991/6444）里读出来的。做正交对照才看清楚
+（deepseek-v4-flash，各 3 次）：
+
+| | 首字 |
+|---|---|
+| 大 prompt(38363字) + 思考开 | 3374ms |
+| 大 prompt + **思考关** | **1257ms** |
+| 小 prompt(51字) + 思考开 | 2654ms |
+| 小 prompt + 思考关 | 1000ms |
+
+**关思考 ≈ 省 2100ms；把 prompt 砍掉 99% ≈ 省 700ms。**
+先关思考，再谈精简 prompt——顺序反了就是花大力气办小事。
+（语音场景本来也不该让模型"想"：用户在等着听声音。）
+
+`enable_thinking=False` 和 `thinking={"type":"disabled"}` 实测都生效，
+用前者（DeepSeek 原生字段）。球球老师自己的代码里本来就有
+`_thinking_off(call_mode)` 做这件事，只是给 MiMo 用的。
+
+### 接上真实引导后的完整链路
+
 ```
-带闸门的端点（服务端实测 first_token_ms）  3235 / 3297 / 3326 ms   ← 很稳
-直连 TokenHub 同模型同 prompt（无闸门）    7412 / 2589 / 2932 ms   ← 跳得厉害
+接 8 铁律 + 该孩子记忆 + safety 双闸门，首字 1598 / 1751 / 1689 ms
+一轮完整对话                        首字 1921 / 2105 / 2096 ms
+红线接管（不调 LLM）                 45ms
+孩子说完 → 球球第一个字 ≈ 89ms(ASR) + ~1700ms(LLM) ≈ 1.8s
 ```
 
-**闸门的代价被高估了。** holdback=6 字，按流式吐字速度约 100~200ms；
-上面那个几百毫秒的差是 LLM 自身波动淹掉的，不是闸门造成的。
-真正该盯的是 LLM 首字本身在 2.6~7.4s 之间跳——这个波动比平均值更要命，
-因为孩子等 7 秒和等 2.6 秒是两种完全不同的体验。
+### 前缀缓存
 
-红线接管实测 `total_ms=0.7`，`took_over=true`，LLM 零调用。
+TokenHub 支持，`deepseek-v4-flash` 在支持列表里，但**要自己报身份**：
+请求体 `prompt_cache_key`（用跨轮稳定的 conversation_id，不是 session_id）
++ HTTP 头 `X-Session-ID`。已接上。但关思考之后它的边际收益被淹没，
+看不出净贡献——**它真正的价值在成本**（38363 字每轮重发，命中价是原价 1/4~1/10）。
+
+### 轮后分析
+
+采样 + 洞察卡跑通，事实落库并带可信度分层：
+
+```
+[preference/corroborated] 迷上了折纸           「我最近迷上了折纸」
+[event/unverified] 折了一只很难的龙，花了两个小时  「折了一只很难的龙，折了两个小时」
+```
+
+⚠️ **采样超过 40 秒才落库**（它自己要调一次 LLM）。所以必须异步——
+同步跑等于每轮对话后面挂 40 秒。节奏是每 3 个来回采一次
+（`sampling.MIN_TURNS_TO_SAMPLE=3` / `SAMPLE_EVERY_TURNS=3`），
+所以聊 4 个来回时看不到新事实是正常的，不是坏了。
+
+## 踩过的坑（都写进代码注释了）
+
+| 现象 | 真因 |
+|---|---|
+| 房间里两个球球，同一句话答两遍且答案不同 | 没传 `SessionId`；用内存字典记 TaskId 挡不住（重启就忘） |
+| 任务停不掉 | `Stop` 只认 TaskId，而 `Describe(SessionId)` 回来的 TaskId 是空的 → **TaskId 必须落盘** |
+| 页面白屏无报错 | 站点 CSP 是 `script-src 'self'`，挡掉了 TRTC 的 SDK |
+| 有字没声 | `TTSConfig.AppId` 要腾讯云**账号** APPID（int），不是 TRTC SdkAppId |
+| 常驻服务偶发 `RemoteProtocolError` | httpx 复用了被对端关掉的长连接。重试**只能在一个字都没吐时**做 |
+| `Describe(SessionId)` 报 `ciphertext less than 16` | 漏了 `SdkAppId`，它是必填 |
 
 ## 还没测的
 
-端到端（真人说话 → 听到球球出声）。需要人对着麦克风讲，
-打开 https://qiuqiu.yongle.school/voicekit/test 点"开始对话"。
-页面会显示「你说完 → 球球第一个字」和其中属于 LLM 的部分。
+**真人对着麦克风说话**。打开 https://qiuqiu.yongle.school/voicekit/test
+点"开始对话"。页面会自己诊断没声音的三种原因（收到音频流 / 自动播放被挡 /
+12 秒没音频流说明 TTS 没通）。
+
+身份栏默认填的是测试孩子「球」的 child_id —— 走 8 铁律 + 他的真实记忆。
+填 `child-demo` 这类非 UUID 会回落到简化配置，**那条路没有记忆，球球会编**。
