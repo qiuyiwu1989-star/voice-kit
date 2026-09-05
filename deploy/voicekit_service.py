@@ -20,6 +20,7 @@
     VOICEKIT_API_KEY                  TRTC 回调我们时用的 bearer，必须设
     VOICEKIT_PUBLIC_URL               本服务的公网地址，用来告诉 TRTC 回调到哪
 """
+import json
 import os
 import re
 import sys
@@ -132,29 +133,70 @@ class SessionReq(BaseModel):
     user: str
 
 
-LIVE_TASKS = {}      # room -> task_id，用来在重试前把上一次的收干净
+# TaskId 必须落盘：StopAIConversation 只认 TaskId，而按 SessionId 查回来的
+# TaskId 是空的——记在内存里的话，服务一重启这些任务就永远停不掉了，
+# 只能干等 MaxIdleTime，期间一直计费。这是 API 的硬约束，不是洁癖。
+TASK_FILE = Path("/opt/voicekit/tasks.json")
+
+
+def _tasks() -> dict:
+    try:
+        return json.loads(TASK_FILE.read_text())
+    except Exception:
+        return {}
+
+
+def _save_task(room: str, task_id) -> None:
+    d = _tasks()
+    if task_id:
+        d[room] = task_id
+    else:
+        d.pop(room, None)
+    try:
+        TASK_FILE.write_text(json.dumps(d))
+    except Exception:
+        pass
+
+
+def _clear_room(room: str) -> dict:
+    """停掉这个房间里我们记得的任务，并如实报告还有没有停不掉的。"""
+    from voice_kit.providers.base import ProviderError
+    killed = None
+    old = _tasks().get(room)
+    if old:
+        try:
+            trtc.stop(old)
+            killed = old
+        except ProviderError:
+            pass                      # 多半已经自己 idle 掉了
+        _save_task(room, None)
+    # 停完再查一次：如果还在跑，就是个我们没有 TaskId 的孤儿，只能等它超时
+    orphan = trtc.session_running(room)
+    return {"killed": killed, "orphan_still_running": orphan}
 
 
 @app.post("/voicekit/api/session")
 def start_session(req: SessionReq):
     """发 UserSig 并起 AI 对话任务。联调用，没有鉴权——测完就把服务停掉。
 
-    两个踩过的坑（2026-09-05 实测）：
+    实测踩过的坑（2026-09-05）：
 
     1. **机器人 userId 不能按房间号写死**。之前写的是 `bot-{room}`，
-       于是同一个房间重试必撞 `FailedOperation.TaskExist:
-       robot userId repeat request in same room`。加随机后缀。
-    2. 上一次的任务可能还活着（MaxIdleTime 没到）。所以起新任务前
-       先把本进程记得的那个停掉——不然房间里会有两个机器人抢着说话。
+       同一个房间重试必撞 `FailedOperation.TaskExist`。加随机后缀。
+    2. **旧任务不清就会有两个球球**。真出现过：房间里两个任务各自独立
+       做 ASR→LLM→TTS，同一句话被回答两遍、答案还不一样。
+    3. **`SessionId` 才是正解**——腾讯官方的去重口子。传了它之后，
+       同房间重复起任务会被直接挡在 `FailedOperation.TaskExist`。
+    4. **TaskId 必须落盘**。Stop 只认 TaskId，而 Describe(SessionId) 回来的
+       TaskId 是空的：记在内存里，一重启就再也停不掉，只能烧到超时。
     """
     from voice_kit.providers.base import ProviderError
 
-    old = LIVE_TASKS.pop(req.room, None)
-    if old:
-        try:
-            trtc.stop(old)
-        except Exception:
-            pass          # 它可能已经自己 idle 掉了，停不掉不是错
+    cleared = _clear_room(req.room)
+    if cleared["orphan_still_running"]:
+        raise HTTPException(409, (
+            f"房间 {req.room} 里还有一个停不掉的旧任务（我们没有它的 TaskId）。"
+            f"等它 idle 超时（≤120 秒），或者换一个房间号。"))
 
     bot_id = f"bot-{uuid.uuid4().hex[:10]}"
     try:
@@ -168,14 +210,16 @@ def start_session(req: SessionReq):
             bot_user_id=bot_id,
             welcome_message="你好呀，我是球球！今天想聊点什么？",
             max_idle_time=120,
+            session_id=req.room,
         )
     except ProviderError as e:
-        # 把腾讯的错误码原样透出去。探针页最怕的就是"HTTP 500"这种
-        # 什么都不说的失败——排查全靠猜。
+        # 把腾讯的错误码原样透出去。探针页最怕"HTTP 500"这种什么都不说的
+        # 失败——排查全靠猜。
         raise HTTPException(502, str(e))
 
-    LIVE_TASKS[req.room] = task_id
+    _save_task(req.room, task_id)
     return {"task_id": task_id, "sdkappid": SDKAPPID, "bot": bot_id,
+            "killed_stale": cleared["killed"],
             "user_sig": trtc.user_sig(req.user, expire=7200)}
 
 
@@ -183,14 +227,20 @@ def start_session(req: SessionReq):
 def stop_session(body: dict):
     from voice_kit.providers.base import ProviderError
     tid = body.get("task_id")
-    for room, t in list(LIVE_TASKS.items()):
+    for room, t in list(_tasks().items()):
         if t == tid:
-            LIVE_TASKS.pop(room, None)
+            _save_task(room, None)
     try:
         trtc.stop(tid)
     except ProviderError as e:
         return {"ok": False, "note": str(e)}    # 已经结束了也算停成功
     return {"ok": True}
+
+
+@app.post("/voicekit/api/clear")
+def clear_room(body: dict):
+    """手动清场。停不掉的孤儿会如实报出来——它会一直计费到超时。"""
+    return _clear_room(body["room"])
 
 
 @app.get("/voicekit/api/turns")

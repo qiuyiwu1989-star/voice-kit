@@ -116,3 +116,45 @@ def test_start_payload_points_llm_at_us(monkeypatch):
     assert seen["payload"]["AgentConfig"]["TargetUserId"] == "child-abc"
     # 机器人自己的 UserSig 必须是签好的，不是空的
     assert decode_user_sig(seen["payload"]["AgentConfig"]["UserSig"])["TLS.sdkappid"] == APPID
+
+
+def test_session_id_is_sent_when_given(monkeypatch):
+    """SessionId 是腾讯的去重口子。不传它，同一个房间能起出多个互不知情的
+    任务——真踩过：两个球球各自 ASR→LLM→TTS，同一句话回答两遍还不一样。"""
+    c = TRTCConversation("sid", "skey", APPID, KEY)
+    seen = {}
+    monkeypatch.setattr(c, "_call", lambda a, p: (seen.update(p), {"TaskId": "t"})[1])
+    c.start("room-1", llm_api_url="u", llm_api_key="k",
+            target_user_id="child", session_id="room-1")
+    assert seen["SessionId"] == "room-1"
+
+
+def test_bot_user_id_must_not_be_derived_from_room(monkeypatch):
+    """机器人 userId 按房间号写死的话，同房间重试必撞 TaskExist。
+    这条钉住"调用方要给一个每次都不同的 bot id"这个约定。"""
+    c = TRTCConversation("sid", "skey", APPID, KEY)
+    ids = []
+    monkeypatch.setattr(c, "_call",
+                        lambda a, p: (ids.append(p["AgentConfig"]["UserId"]), {"TaskId": "t"})[1])
+    for bot in ("bot-aaa", "bot-bbb"):
+        c.start("same-room", llm_api_url="u", llm_api_key="k",
+                target_user_id="child", bot_user_id=bot)
+    assert ids[0] != ids[1]
+
+
+def test_describe_by_session_includes_sdkappid(monkeypatch):
+    """按 session 查时 SdkAppId 是必填的。漏了会收到一句毫无线索的
+    `InvalidParameter.TaskId: ciphertext less than 16:[]`——实测过。"""
+    c = TRTCConversation("sid", "skey", APPID, KEY)
+    seen = {}
+    monkeypatch.setattr(c, "_call", lambda a, p: (seen.update(p), {"Status": "InProgress"})[1])
+    c.describe(session_id="room-1")
+    assert seen == {"SdkAppId": APPID, "SessionId": "room-1"}
+
+
+def test_session_running_reads_status(monkeypatch):
+    c = TRTCConversation("sid", "skey", APPID, KEY)
+    monkeypatch.setattr(c, "_call", lambda a, p: {"Status": "InProgress", "TaskId": ""})
+    assert c.session_running("room-1") is True
+    monkeypatch.setattr(c, "_call", lambda a, p: {"Status": "Stopped", "TaskId": ""})
+    assert c.session_running("room-1") is False

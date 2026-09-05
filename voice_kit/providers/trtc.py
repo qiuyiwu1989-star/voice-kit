@@ -136,7 +136,7 @@ class TRTCConversation:
               tts_secret_id: Optional[str] = None,
               tts_secret_key: Optional[str] = None,
               language: str = "zh", max_idle_time: int = 60,
-              interrupt_mode: int = 0) -> str:
+              interrupt_mode: int = 0, session_id: Optional[str] = None) -> str:
         """起一个 AI 对话任务，返回 TaskId。
 
         `llm_api_url` 指向我们自己带闸门的端点——**这是整个方案的关键**，
@@ -144,6 +144,13 @@ class TRTCConversation:
 
         `interrupt_mode`：0=自动（服务端语义打断），1=客户端控制。
         儿童场景建议先用 0，孩子说话本来就断断续续，服务端的 VAD 比我们手搓的稳。
+
+        ⚠️ **`session_id` 一定要传**（一般就用房间号）。2026-09-05 实测踩过：
+        不传的话，同一个房间里可以起出多个互不知情的任务，每个都独立
+        做一遍 ASR→LLM→TTS，于是**房间里有两个球球抢着说话，还给出不同的
+        回答**。用自己在内存里记 task_id 的办法挡不住——重启就忘了，
+        别的进程起的更是看不见。SessionId 是腾讯官方的去重口子，
+        还能拿它反查任务（`describe(session_id=...)`），是唯一可靠的抓手。
         """
         payload = {
             "SdkAppId": self.sdk_app_id,
@@ -174,13 +181,47 @@ class TRTCConversation:
                 "VoiceType": tts_voice,
             }),
         }
+        if session_id:
+            payload["SessionId"] = session_id
         return self._call("StartAIConversation", payload)["TaskId"]
 
     def stop(self, task_id: str) -> None:
+        """停任务。
+
+        ⚠️ **只认 TaskId，没有按 SessionId 停的变体**（2026-09-05 实测：
+        带 SdkAppId+SessionId 调过去，回的是 `MissingParameter: ... TaskId`）。
+        而按 session 查回来的 TaskId 又是空的。
+
+        两件事合起来意味着一条硬约束：**TaskId 丢了，任务就停不掉了**，
+        只能等它自己 idle 到 MaxIdleTime——期间一直计费。
+        所以调用方必须把 TaskId **持久化**（落盘/入库），
+        放内存里一重启就成了孤儿。这是这个 API 的性质，不是实现问题。
+        """
         self._call("StopAIConversation", {"TaskId": task_id})
 
-    def describe(self, task_id: str) -> dict:
-        return self._call("DescribeAIConversation", {"TaskId": task_id})
+    def describe(self, task_id: Optional[str] = None,
+                 session_id: Optional[str] = None) -> dict:
+        """查任务状态。按 session 查时 **SdkAppId 是必填的**（漏了会得到一句
+        莫名其妙的 `InvalidParameter.TaskId: ciphertext less than 16:[]`）。
+
+        ⚠️ 按 session 查回来的 `TaskId` 是**空字符串**（2026-09-05 实测）。
+        所以它只能告诉你"这个房间里还有没有任务在跑"，
+        **不能**拿来把它停掉——见 `stop()` 的注释。
+        """
+        if task_id:
+            return self._call("DescribeAIConversation", {"TaskId": task_id})
+        if session_id:
+            return self._call("DescribeAIConversation",
+                              {"SdkAppId": self.sdk_app_id, "SessionId": session_id})
+        raise ValueError("describe 需要 task_id 或 session_id")
+
+    def session_running(self, session_id: str) -> bool:
+        """这个房间里还有任务在跑吗。"""
+        try:
+            d = self.describe(session_id=session_id)
+        except ProviderError:
+            return False
+        return str(d.get("Status", "")).lower() in ("inprogress", "running", "preparing")
 
     def close(self) -> None:
         self._http.close()
