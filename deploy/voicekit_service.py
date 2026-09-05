@@ -264,6 +264,15 @@ def start_session(req: SessionReq):
             f"房间 {req.room} 里还有一个停不掉的旧任务（我们没有它的 TaskId）。"
             f"等它 idle 超时（≤120 秒），或者换一个房间号。"))
 
+    # 开场白按孩子算：第一次见面要说信任声明（产品红线），回访不编上次话题。
+    # TRTC 的 WelcomeMessage 是静态串、由 TTS 直接念，模型碰不到它。
+    welcome = "你好呀，我是球球！今天想聊点什么？"
+    if BRIDGE is not None:
+        try:
+            welcome = BRIDGE.welcome_for(BRIDGE.resolve_child(req.user))
+        except Exception:
+            pass          # 不是 child_id（走简化配置）就用通用开场
+
     bot_id = f"bot-{uuid.uuid4().hex[:10]}"
     try:
         task_id = trtc.start(
@@ -274,7 +283,7 @@ def start_session(req: SessionReq):
             system_prompt=SYSTEM_PROMPT,
             target_user_id=req.user,
             bot_user_id=bot_id,
-            welcome_message="你好呀，我是球球！今天想聊点什么？",
+            welcome_message=welcome,
             max_idle_time=120,
             session_id=req.room,
         )

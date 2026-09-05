@@ -37,6 +37,7 @@
 import os
 import re
 import sys
+import threading
 import time
 from typing import Iterator, Optional
 from uuid import UUID
@@ -103,14 +104,97 @@ class QiuqiuBridge:
         return cid
 
     def session_for(self, child_id: UUID) -> UUID:
+        """拿这个孩子当前该用的 session。
+
+        **不要只靠进程内的字典**——服务一重启就全忘了，同一个孩子会被开出
+        一堆碎会话，后台采样按 session 聚合，碎了就分析不出东西。
+        （跟 TaskId 那次是同一类错误：状态放内存 = 重启即孤儿。）
+
+        真源是库：先问 `get_resumable_session`（生产端点就是这么做的），
+        没有可续的才新开。
+        """
         sid = self._sessions.get(child_id)
+        if sid is not None:
+            return sid
+        try:
+            prev = qq_db.get_resumable_session(child_id)
+            if prev:
+                sid = prev["session_id"]
+        except Exception:
+            sid = None
         if sid is None:
             sid = qq_agent.get_container(child_id).start_new_session()
-            self._sessions[child_id] = sid
+        self._sessions[child_id] = sid
         return sid
 
     def end_session(self, child_id: UUID) -> None:
         self._sessions.pop(child_id, None)
+
+    # ---------------------------------------------------------------- 开场白
+
+    def welcome_for(self, child_id: UUID) -> str:
+        """这个孩子该听到的第一句话。
+
+        TRTC 的 `WelcomeMessage` 是起任务时传的**静态字符串**，会被 TTS
+        一字不差念出来——模型完全不参与。所以两件事必须在这里做对：
+
+        1. **第一次见面必须说信任声明**。这不是话术，是产品红线：
+           CLAUDE.md 写明"孩子第一次对话时听到的信任声明"，
+           `agent/system-prompt.md` L50-57 有原文。文字端靠模型执行，
+           语音端模型碰不到这句，只能由我们发出去。
+        2. **回访时绝不编上次聊了什么**。宁可说一句笼统的，也不要猜——
+           猜错就是"我记得你的小仓鼠"那种幻觉，而且是从第一句就开始骗人，
+           比聊到一半编还糟。只有库里真有 `topics_explored` 才提。
+        """
+        cont = qq_agent.get_container(child_id)
+        cont._profile_summary = None
+        p = cont.profile_summary
+        name = p.get("nickname") or "同学"
+
+        if (p.get("total_turns") or 0) < 1:
+            return (
+                f"你好呀，{name}，我是球球老师。"
+                "我是一个特别喜欢问问题的人——不是老师那种问题，是好奇你怎么想的那种。"
+                "我们聊的话会被整理成一份报告给你爸爸妈妈看，里面会引用你说过的一些话，"
+                "让他们更懂你——但球球老师只会挑让你觉得被理解、被欣赏的话，"
+                "不会挑出来说你的不是。你可以放心跟我说。"
+                "今天想聊点啥呀？")
+
+        topics = p.get("topics_explored") or []
+        if isinstance(topics, str):
+            topics = [topics]
+        if topics:
+            return (f"嘿，是你呀，我等你好久了～上次我们聊到{topics[-1]}，"
+                    "我一直记着呢。今天想聊点啥？")
+        return "嘿，是你呀，我等你好久了～今天想聊点啥？"
+
+    # ---------------------------------------------------------------- 轮后分析
+
+    def _analyze_later(self, child_id: UUID, session_id: UUID) -> None:
+        """认知采样 + 洞察卡，另开线程跑。
+
+        这一步不做，TRTC 上的对话就只是聊天记录——**产不出报告**，
+        画像、潜能赛道、家长端那份"看见孩子"的东西全都没有。
+        生产端点用 BackgroundTasks 做同一件事（`main._background_analyze`）。
+
+        必须异步：采样自己要调一次 LLM，几秒起步；同步跑就等于每轮
+        对话后面挂一条几秒的尾巴，孩子那边会听见明显的卡顿。
+        异常全吞——分析失败不能影响对话本身。
+        """
+        def run():
+            try:
+                import sampling as qq_sampling
+                qq_sampling.maybe_sample(child_id, session_id)
+            except Exception:
+                pass
+            try:
+                import report as qq_report
+                qq_report.maybe_generate_insight(child_id, session_id)
+            except Exception:
+                pass
+
+        threading.Thread(target=run, daemon=True,
+                         name=f"analyze-{child_id}").start()
 
     # ---------------------------------------------------------------- 一轮
 
@@ -142,6 +226,7 @@ class QiuqiuBridge:
                                     detail=red.category if hasattr(red, "category") else "")
             except Exception:
                 pass          # 记录失败不能让孩子那边断音
+            self._analyze_later(child_id, session_id)
             yield {"kind": "takeover", "text": reply, "rule": "red_trigger"}
             return
 
@@ -194,9 +279,16 @@ class QiuqiuBridge:
                 yield {"kind": "delta", "text": tail}
 
         reply = (buffer[:flushed] + tail) if tail else buffer[:flushed]
-        if reply.strip():
-            qq_db.save_turn(child_id=child_id, session_id=session_id,
-                            turn_index=next_idx + 1, speaker="bot", content=reply)
+        # 落库前再剥一次内部标记：流式那一路是"遇到标记就截断"，
+        # 但标记也可能整块一次到达、恰好落在最后一片里。
+        reply = qq_agent._strip_internal_markers(reply)
+        if not reply.strip():
+            reply = "嗯，我想想……（我卡了一下，再说一次好吗？）"
+            yield {"kind": "correction", "text": reply}
+        qq_db.save_turn(child_id=child_id, session_id=session_id,
+                        turn_index=next_idx + 1, speaker="bot", content=reply)
+        # 采样 + 洞察卡。不跑这一步，TRTC 上的对话产不出任何报告。
+        self._analyze_later(child_id, session_id)
 
 
 def _to_openai(messages) -> list:
