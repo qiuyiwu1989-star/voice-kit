@@ -107,6 +107,24 @@ TokenHub 支持，`deepseek-v4-flash` 在支持列表里，但**要自己报身�
 | 有字没声 | `TTSConfig.AppId` 要腾讯云**账号** APPID（int），不是 TRTC SdkAppId |
 | 常驻服务偶发 `RemoteProtocolError` | httpx 复用了被对端关掉的长连接。重试**只能在一个字都没吐时**做 |
 | `Describe(SessionId)` 报 `ciphertext less than 16` | 漏了 `SdkAppId`，它是必填 |
+| `Failed to construct 'Worker'` … denied by CSP | TRTC 的 `enableAudioVolumeEvaluation` 用 blob URL 起 Worker。`script-src` 里放了 SDK 域名还不够，**要单独放 `blob:` 并补 `worker-src`**——Worker 走的是 `worker-src`（回退到 `child-src`→`script-src`），不是普通脚本那条 |
+
+## nginx 那条 location 现在的 CSP
+
+```
+default-src 'self' https: wss: data: blob:;
+script-src  'self' 'unsafe-inline' blob: https://web.sdk.qcloud.com;
+worker-src  'self' blob:;   child-src 'self' blob:;
+style-src   'self' 'unsafe-inline';
+connect-src *;
+media-src   'self' blob: data:;
+```
+
+`blob:` 和 `worker-src` 是第二次才补上的——第一次只想到 SDK 本身，
+没想到它会起 Worker。**加音量检测的那次改动把页面弄挂了**，
+现象是点「开始对话」直接失败，跟 TRTC 本身无关。
+
+生产页面的严格 CSP 一个字没动（`curl -I /` 复验过）。
 
 ## 闸门实测（2026-09-05，两轮各 6 条真实场景）
 
