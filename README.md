@@ -225,35 +225,47 @@ python -m pytest tests/ -q
 
 - ✅ provider 抽象 + MiMo 实现（生产验证：WAV 拼接 RIFF 头=1，ASR 倍速比 0.559）
 - ✅ 输出/输入闸门（含变异验证）
-- ✅ 可信度分层 + 诱导识别（26 例测试全过）
-- ✅ 腾讯 provider：实时流式 ASR（**实测说完 89ms 出结果，省 99%**）+ 一句话识别 + TTS
-- ✅ TokenHub LLM provider（OpenAI 协议；**同模型换网关 −24% 首字**）
-- ✅ `VoicePipeline` + `VoiceConfig`：一套代码多个产品（46 测试全过）
-- 🟡 腾讯**流式** TTS：代码 + 签名测试就绪，**尚未对真实端点联调**
-  （签名按文档实现：比 ASR 多一个 `GET` 前缀、且对未编码的原始参数值签名。
-  这两条已用离线测试钉住并带反证，但没跑过真连接——**别当成已验证的**）
-- ⬜ 全腾讯链路的端到端联调实测（脚本已就绪，待在服务器上跑一次）
+- ✅ 可信度分层 + 诱导识别
+- ✅ 腾讯 provider：实时流式 ASR（**说完 89ms 出结果，省 99%**）+ 一句话识别 + TTS
+- ✅ TokenHub LLM provider（OpenAI 协议 + 前缀缓存 + **关思考 −63% 首字**）
+- ✅ `VoicePipeline` + `VoiceConfig`：一套代码多个产品
 - ✅ OpenAI 协议端点（`openai_server.py`）：把编排交给别人，安全留在自己手里
-- 🟡 腾讯 TRTC 对话式 AI 接入 —— 账号侧两关已实测通过（见下），端到端待测
+- ✅ 音色库（`voices.py`，21 个中文音色三档 + 儿童场景选型约束）
+- ✅ **TRTC 对话式 AI 全链路跑通**（详见 `deploy/README.md`）
+- 🟡 腾讯**流式** TTS：代码 + 签名测试就绪，**没跑过真连接**（走 TRTC 后暂时用不上）
 - ⬜ 客户端编排（VAD / 抢跑 / 句级流式 / 打断）从球球老师抽取
-  （若走 TRTC，这一项**直接不用做**——那正是它替我们干的活）
-- ⬜ 球球老师切到 voice-kit（**在它稳定前不要动生产代码**）
+  —— **走 TRTC 的话这一项直接不用做**，那正是它替我们干的活
+- ⬜ 球球老师切生产（**8 铁律 A/B 已过，但画像/报告质量还在比**）
 
-### TRTC 对话式 AI：已经验过的两件事（2026-09-05，SdkAppId 1600160922）
-
-被"要不要先买套餐"卡住是最常见的假动作，所以先用两个探针把它证伪：
+## TRTC 全链路：验到哪一步了
 
 ```
-DescribeAIConversation(假TaskId) → InvalidParameter.TaskId
-    不是 AuthFailure、不是"未开通" → 鉴权和服务开通两关都过了
-
-StartAIConversation → ✅ TaskId=v2_20260905_qrRfw7ov...  → StopAIConversation ✅
-    不需要预先买 AI 智能语音套餐（475元/月）就能起任务，按量即可验证
-    且它接受了 LLMConfig.APIUrl 指向我们自己的端点
+编排  腾讯 TRTC 对话式 AI          ✅ 起停任务 / SessionId 去重 / 打断
+ASR   腾讯实时流式                ✅ 说完 89ms
+LLM   我们自己的 /v1/chat/completions  ✅ 每个 token 过闸门，首字 ~1.7s
+TTS   腾讯 502001 智小柔（超自然）   ✅ 6 个候选可当场 A/B
+引导  真实 8 铁律 + 该孩子记忆      ✅ 复用生产真源，不是简化版
+安全  safety 输入/输出双闸门        ✅ 12 条挑衅零违规，真实触发过 1 次
+落库  对话 + 事实（带可信度分层）    ✅
+降级  LLM 挂掉说人话，不半截静音    ✅
 ```
 
-**这就是 `openai_server.py` 存在的理由**：TRTC 把 LLM 这一段留给你自己接，
-于是「用他们的编排」和「守住 8 铁律」不再是二选一。
+**唯一还只能靠耳朵判的是音色。** 打开
+https://qiuqiu.yongle.school/voicekit/test 点「开始对话」。
 
-还没验的是端到端延迟——需要一个公网可达的端点 + 一个真人对着麦克风说话。
-注意官方宣传的「1s」里**不含**我们这条 LLM 的 2392~4337ms，叠起来多少只能实测。
+## 这条路上最贵的六个坑
+
+全部实测撞到过，细节和修法在 `deploy/README.md`：
+
+1. 不传 `SessionId` → **房间里两个球球抢着说话**，答案还不一样
+2. `Stop` 只认 TaskId 而 `Describe(SessionId)` 回来的 TaskId 是空的
+   → **TaskId 必须落盘**，丢了就再也停不掉、一直计费
+3. `TTSConfig.AppId` 要腾讯云**账号** APPID（int），不是 TRTC SdkAppId
+   → 传错了任务照起、文字照出、**零报错、一点声音没有**
+4. 站点 CSP 挡掉 SDK → 白屏；补了 SDK 域名还不够，
+   `enableAudioVolumeEvaluation` 起 blob Worker，**要 `worker-src`**
+5. 常驻服务里 httpx 复用死连接 → `RemoteProtocolError`。
+   重试**只能在一个 token 都没吐时**做，否则孩子听到同一句说两遍
+6. LLM 失败异常抛穿 SSE → **孩子听到话说一半突然静音**，
+   比说错话更糟（孩子会以为是自己说错了什么）
+
