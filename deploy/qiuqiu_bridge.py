@@ -67,40 +67,10 @@ import agent as qq_agent          # noqa: E402
 import db as qq_db                # noqa: E402
 import safety as qq_safety        # noqa: E402
 
+from qq_text import fallback_for as _fallback_for       # noqa: E402
+from qq_text import humanize_topic as _humanize_topic    # noqa: E402
+
 HOLDBACK = 24                     # 跟生产版一致，不另立门户
-
-# 闸门拦下后说什么。**必须按违反的规则分开写**——2026-09-05 实测教训：
-# 孩子说"拜拜啦球球，我下次再来找你玩"，模型回了句违规的告别，
-# 闸门拦下、换成通用兜底「我们换个话题聊聊吧」，结果答非所问——
-# 孩子在道别，球球在转话题。
-#
-# 文字端可以非流式重生一次（生产版 stream_message 就是这么做的），
-# 语音端不行：前面的句子已经出声了，收不回。所以只剩这一条路——
-# 让兜底话术**知道自己在替什么话收场**。
-_FALLBACK_BY_RULE = {
-    "铁律 #3：禁止主动结束对话":
-        "你要是得走了就先去忙，我不走的——回来接着跟我说这件事好吗？",
-    "禁用病理化词汇":
-        "嗯，我听着呢。你愿意多讲讲那是什么感觉吗？我想听你自己怎么说。",
-    "禁用防御型话术（卖潜能不卖避险）":
-        "我更想知道你自己怎么看这件事——你觉得最有意思的地方在哪？",
-    "称呼应使用'同学'":
-        "我还是叫你同学吧。刚才那件事，你接着说？",
-    "禁止标签化（应使用'倾向于'）":
-        "我不太想给你贴一个标签——你自己觉得，你是那种什么样的人？",
-    "铁律 #6：禁止空夸（必须带具体内容）":
-        "先别急着让我夸——你跟我讲讲，这里面哪一步是最难的？",
-}
-_FALLBACK_DEFAULT = "……我们换个话题聊聊吧，你刚才说的那个我还想再听听。"
-
-
-def _fallback_for(violation) -> str:
-    """挑一句"接得上"的兜底。命中多条时取第一条——规则之间没有优先级之分，
-    但至少要比一句放之四海皆准的废话强。"""
-    for rule in (violation.violated_rules or []):
-        if rule in _FALLBACK_BY_RULE:
-            return _FALLBACK_BY_RULE[rule]
-    return _FALLBACK_DEFAULT
 
 
 class QiuqiuBridge:
@@ -330,7 +300,7 @@ class QiuqiuBridge:
                 # 前面的句子已经说出口了，只能用一句安全话术收尾——
                 # 这正是语音相对文字**退化**的地方，如实体现，不粉饰。
                 # 但至少让这句话接得上：按违反的规则挑，不用通用废话。
-                tail = _fallback_for(v)
+                tail = _fallback_for(v.violated_rules)
                 yield {"kind": "correction", "text": tail,
                        "violated": v.violated_rules}
             else:
@@ -359,21 +329,3 @@ def _to_openai(messages) -> list:
             c = "".join(b.get("text", "") for b in c if isinstance(b, dict))
         out.append({"role": m.get("role", "user"), "content": c or ""})
     return out
-
-
-# 课程编码形如 "L1-22·折纸进阶挑战（龙到凤凰）"——那是给后台看的。
-# 2026-09-05 联调实拍：开场白把 "L1-22" 原样念给孩子听了。
-# 文字端还只是难看，语音端 TTS 会一个字母一个字母念出来，直接暴露系统黑话。
-_TOPIC_CODE = re.compile(r"^[A-Za-z]+\d*[-_]?\d*\s*[·:：\-]\s*")
-
-
-def _humanize_topic(raw: str) -> str:
-    """把话题串洗成能念出口的样子。洗不干净就返回空——
-    宁可说一句笼统的开场白，也不要念出内部编号。"""
-    if not raw:
-        return ""
-    t = _TOPIC_CODE.sub("", str(raw)).strip()
-    t = re.sub(r"[（(][^）)]*[）)]\s*$", "", t).strip()   # 去掉尾部括号补充说明
-    if not t or len(t) > 20 or re.search(r"[A-Za-z]{2,}\d", t):
-        return ""          # 还有编码残留就不用了
-    return t
