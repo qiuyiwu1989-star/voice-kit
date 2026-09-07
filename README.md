@@ -26,6 +26,23 @@
 
 ---
 
+## 已经是公共能力了：https://voice.qiuyiwu.com
+
+不再是"每个项目各自 import 一份"。线上跑着一个多租户服务，
+**一套代码、多个项目、各带各的护栏**——由钥匙决定用哪套配置。
+
+```python
+c = OpenAI(base_url="https://voice.qiuyiwu.com/v1", api_key=os.environ["VOICEKIT_KEY"])
+```
+
+端点长成 OpenAI 的样子，所以接入成本接近零：改一个 base_url 和一把钥匙，
+**白拿闸门**。同一句话，球球老师那把钥匙拦下，AI 教练那把钥匙放行。
+
+接法见 **[docs/接入指南.md](docs/接入指南.md)**；
+部署件在 `deploy/`（systemd + nginx + tenants 样例）。
+
+---
+
 ## 三块
 
 ```

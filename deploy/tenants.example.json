@@ -1,0 +1,42 @@
+{
+  "_说明": [
+    "生产的这份在服务器 /opt/voicekit-svc/tenants.json，不进 git——里面是钥匙哈希。",
+    "加一个项目 = 往 tenants 里加一条，服务会按 mtime 自动重载，不用重启。",
+    "key_sha256 = sha256(明文钥匙)。明文只在生成那一刻存在，服务端不存明文。",
+    "  生成：python -c \"import secrets,hashlib;k='vk_'+secrets.token_urlsafe(24);print(k, hashlib.sha256(k.encode()).hexdigest())\"",
+    "output_rules 非空时必须给 fallback_reply，否则加载时直接报错——",
+    "  宁可起不来，也不要线上有孩子在用的时候才发现拦下了却没话说。"
+  ],
+  "tenants": [
+    {
+      "id": "qiuqiu",
+      "name": "球球老师（儿童）",
+      "key_sha256": "<sha256>",
+      "model": "deepseek-v4-flash",
+      "thinking": false,
+      "voice_role": "qiuqiu",
+      "system_prompt": "（球球老师的人格，见 球球老师/agent/system-prompt.md）",
+      "output_rules": [
+        {"name": "禁用病理化词汇", "words": ["抑郁", "焦虑症", "心理问题", "多动症", "自闭"]},
+        {"name": "不下诊断", "words": ["诊断", "病症", "障碍"]}
+      ],
+      "input_rules": [
+        {"name": "self_harm", "words": ["不想活", "自杀", "死了算了"]}
+      ],
+      "fallback_reply": "我们再多聊一会儿吧，你刚才说的那个我还没听够。",
+      "on_input_trigger_reply": "我听到了。你愿意多跟我说一点吗？我在。"
+    },
+    {
+      "id": "coach",
+      "name": "AI 教练（成人）",
+      "key_sha256": "<sha256>",
+      "voice_role": "coach"
+    },
+    {
+      "id": "site",
+      "name": "个人站 agent",
+      "key_sha256": "<sha256>",
+      "voice_role": "assistant"
+    }
+  ]
+}

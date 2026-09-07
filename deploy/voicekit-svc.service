@@ -1,0 +1,18 @@
+[Unit]
+Description=voice-kit 公共语音服务（多租户：ASR / LLM带闸门 / TTS / TRTC）
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/voicekit-svc.env
+WorkingDirectory=/opt/voicekit-svc
+# 跟球球老师生产、跟联调探针都分开：独立进程、独立端口、独立配置。
+# 它挂了不影响球球老师；球球老师部署也不碰它。
+ExecStart=/opt/voicekit-svc/venv/bin/uvicorn \
+    --factory voice_kit.service:create_service \
+    --host 127.0.0.1 --port 8020
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
