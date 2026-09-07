@@ -90,12 +90,40 @@ def test_same_sentence_blocked_for_kid_allowed_for_adult(app):
     assert "我们再多聊一会儿吧。" in kid
     assert "风险" in adult, "成人项目不该被儿童规则误伤"
 
-    # ⚠️ 已知瑕疵，如实断言而不是假装没有：
-    # 闸门是**逐段放行**的——违规词出现之前的干净片段已经发出去了，
-    # 拼上兜底话会读着别扭（"这里" + "我们再多聊一会儿吧"）。
-    # 语音里说出口就收不回，这是流式 + 不可撤回的固有代价。
-    # 要消掉它只能加大 holdback（拿延迟换）或者不流式。
     assert kid.endswith("我们再多聊一会儿吧。")
+
+
+def test_violation_mid_sentence_never_leaks_half_a_clause(app):
+    """**2026-09-07 线上抓到的真实缺陷，这条测试是它的墓碑。**
+
+    公网实测里儿童端收到过：
+
+        "失眠确实让人困扰，也容易引起家人的担忧。你妈妈提出" + "我们再多聊一会儿吧"
+                                                    ↑ 从句子中间断掉
+
+    闸门按字符放行，违规词出现在第二句中段时，"你妈妈提出"已经出去了。
+    文字端只是难看；**语音端就是念出半句话再接一句不相干的**，
+    而且说出口收不回——这正是儿童场景最不能接受的那类破绽。
+
+    修法是按整句放行：违规的那一句整句不发，前面干净的整句照常发。
+    """
+    c = TestClient(app)
+    app.state.fake.reply = "失眠确实让人困扰。你妈妈说的那个风险，我们慢慢聊。"
+    kid = sse_text(chat(c, KID_KEY, "睡不着"))
+
+    assert "风险" not in kid
+    # 干净的**整句**要留下——不能因为后面有违规就把整段吞掉
+    assert "失眠确实让人困扰。" in kid
+    # 违规那句的任何片段都不许漏，尤其是它的开头
+    assert "你妈妈说的" not in kid, "半句话漏出去了——语音里就是念半句再换话题"
+    assert kid == "失眠确实让人困扰。我们再多聊一会儿吧。"
+
+
+def test_text_without_any_punctuation_still_gets_through(app):
+    """按整句放行不能变成"没有句号就永远不发"——那是死锁。"""
+    c = TestClient(app)
+    app.state.fake.reply = "好的没问题"
+    assert sse_text(chat(c, KID_KEY, "嗯")) == "好的没问题"
 
 
 def test_wrong_key_is_401(app):

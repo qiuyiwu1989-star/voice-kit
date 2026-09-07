@@ -37,10 +37,44 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+import re
+
 from .gate import InputGate, OutputGate
 from .openai_server import _chunk, _sse
 from .tenants import Registry, Tenant
 from . import voices as V
+
+
+_SENTENCE_END = re.compile(r"[。！？!?…\n]+")
+
+
+def by_sentence(tokens):
+    """把 token 流重组成**完整句子**再往下走。
+
+    为什么必须这么做（2026-09-07 线上实测抓到的）：闸门是按字符放行的，
+    违规词出现在句子中段时，前半句早就发出去了，接上兜底话变成——
+
+        "失眠确实让人困扰…你妈妈提出" + "我们再多聊一会儿吧"
+                          ↑ 从句子中间断掉
+
+    文字端只是难看，**语音端就是念出半句话再接一句不相干的**。
+    按整句放行之后，违规的那一句整句不发，兜底话接得上。
+
+    代价是首字要等第一个句号——但语音场景本来就是整句合成，
+    TTS 也要等整句才开始，所以这个代价在语音里几乎为零。
+    生产版球球老师（`agent._last_sentence_end`）用的就是同一条策略。
+    """
+    buf = ""
+    for tok in tokens:
+        buf += tok
+        while True:
+            m = _SENTENCE_END.search(buf)
+            if not m:
+                break
+            yield buf[:m.end()]
+            buf = buf[m.end():]
+    if buf.strip():
+        yield buf
 
 
 def _need(name: str) -> str:
@@ -119,11 +153,18 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
                               session_id=request.headers.get("x-session-id"),
                               max_tokens=body.get("max_tokens", t.max_tokens))
             if not out_gate:
+                # 没闸门就直接透传，保留逐 token 的最低延迟
                 for tok in toks:
                     yield _sse(_chunk(cid, model, tok))
             else:
-                # voice_mode：语音里说出口就收不回，所以不抄"整句提前下发"的近路
-                for ev in out_gate.filter(toks, low_latency=False):
+                # 有闸门就**按整句**过——半句话被拦下会让兜底话接在句子中间，
+                # 语音里那就是念出半句再接一句不相干的。
+                #
+                # 必须配 low_latency=True：闸门内部还有字符级安全垫，
+                # 不关掉它整句仍会被切在第 N 个字，这个修复就白做了。
+                # 关掉是安全的——安全垫防的是"违禁词被截成两半"（"抑"已显示、
+                # "郁"还在路上），而句号处不可能截断一个词。
+                for ev in out_gate.filter(by_sentence(toks), low_latency=True):
                     yield _sse(_chunk(cid, model, ev["text"]))
             yield _sse(_chunk(cid, model, None, "stop"))
             yield b"data: [DONE]\n\n"
