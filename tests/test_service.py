@@ -119,6 +119,21 @@ def test_violation_mid_sentence_never_leaks_half_a_clause(app):
     assert kid == "失眠确实让人困扰。我们再多聊一会儿吧。"
 
 
+def test_ellipsis_is_not_a_sentence_boundary(app):
+    """`……` 是"话说到一半"，不是句子结束。
+
+    在那儿放行就等于放出半句话——正是本次修复要消灭的东西。
+    两个客户端实现（球球 web/lib、zaowuyun-voice）也都不把它当句界，
+    三边保持一致（2026-09-07 建共享测试向量时对出来的）。
+    """
+    c = TestClient(app)
+    app.state.fake.reply = "我想想……这里有风险，我们慢慢聊。"
+    got = sse_text(chat(c, KID_KEY, "嗯"))
+    assert "风险" not in got
+    assert "我想想" not in got, "在 `……` 处放行了——那就是放出了半句话"
+    assert got == "我们再多聊一会儿吧。"
+
+
 def test_text_without_any_punctuation_still_gets_through(app):
     """按整句放行不能变成"没有句号就永远不发"——那是死锁。"""
     c = TestClient(app)

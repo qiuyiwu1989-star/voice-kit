@@ -45,7 +45,11 @@ from .tenants import Registry, Tenant
 from . import voices as V
 
 
-_SENTENCE_END = re.compile(r"[。！？!?…\n]+")
+# 句界故意**不含** `…`：中文的 `……` 多半是"话说到一半"（"我想想……"），
+# 在那儿放行正是这个修复要消灭的那种半句话。
+# 两个客户端实现（球球 web/lib、zaowuyun-voice）也都不把它当句界——
+# 2026-09-07 建共享向量时对出来的，三边现在一致。
+_SENTENCE_END = re.compile(r"[。！？!?\n]+")
 
 
 def by_sentence(tokens):
@@ -69,7 +73,13 @@ def by_sentence(tokens):
         buf += tok
         while True:
             m = _SENTENCE_END.search(buf)
-            if not m:
+            # 标点正好落在缓冲区末尾时**先别吐**——后面可能还跟着标点。
+            # 逐 token 喂的时候看不见"？？！"是一串，先吐会切成
+            # ["真的吗？", "？", "！"]，语音里就是单独念一个问号。
+            # 等下一个字来确认标点串结束；流结束时由下面的收尾兜住。
+            # （两个客户端实现拿的是累积全文，天然没这个问题——
+            #   2026-09-07 共享向量把这处差异对了出来。）
+            if not m or m.end() == len(buf):
                 break
             yield buf[:m.end()]
             buf = buf[m.end():]
