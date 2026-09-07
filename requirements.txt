@@ -1,0 +1,7 @@
+# voice-kit 公共服务的依赖。刻意保持极少——它只是把几个云服务串起来 + 加闸门。
+fastapi
+uvicorn[standard]
+httpx
+python-multipart      # /v1/audio/transcriptions 走 OpenAI 那套 multipart
+websockets            # 腾讯实时流式 ASR 用（可选，不用流式就不装）
+pytest                # 开发用
