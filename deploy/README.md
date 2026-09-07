@@ -107,24 +107,48 @@ TokenHub 支持，`deepseek-v4-flash` 在支持列表里，但**要自己报身�
 | 有字没声 | `TTSConfig.AppId` 要腾讯云**账号** APPID（int），不是 TRTC SdkAppId |
 | 常驻服务偶发 `RemoteProtocolError` | httpx 复用了被对端关掉的长连接。重试**只能在一个字都没吐时**做 |
 | `Describe(SessionId)` 报 `ciphertext less than 16` | 漏了 `SdkAppId`，它是必填 |
+| `schedule failed: Failed to fetch` | TRTC 的调度域是 **`schedule.cloud-rtc.com` / `.net`**——**跟腾讯的域名毫无字面关系**，怎么猜都猜不到。收紧 `connect-src` 必须靠实测枚举，不能靠猜 |
 | `Failed to construct 'Worker'` … denied by CSP | TRTC 的 `enableAudioVolumeEvaluation` 用 blob URL 起 Worker。`script-src` 里放了 SDK 域名还不够，**要单独放 `blob:` 并补 `worker-src`**——Worker 走的是 `worker-src`（回退到 `child-src`→`script-src`），不是普通脚本那条 |
 
-## nginx 那条 location 现在的 CSP
+## nginx 那条 location 现在的 CSP + 门票
 
 ```
 default-src 'self' https: wss: data: blob:;
 script-src  'self' 'unsafe-inline' blob: https://web.sdk.qcloud.com;
 worker-src  'self' blob:;   child-src 'self' blob:;
 style-src   'self' 'unsafe-inline';
-connect-src *;
+connect-src 'self' https://*.tencentcloudapi.com https://*.qcloud.com
+            https://*.qq.com https://*.tencent-cloud.com
+            https://*.cloud-rtc.com https://*.cloud-rtc.net
+            wss://（同上五个域）;
 media-src   'self' blob: data:;
 ```
 
-`blob:` 和 `worker-src` 是第二次才补上的——第一次只想到 SDK 本身，
-没想到它会起 Worker。**加音量检测的那次改动把页面弄挂了**，
-现象是点「开始对话」直接失败，跟 TRTC 本身无关。
+**这份清单是实测枚举出来的，不是猜的。** 过程值得记下来，因为它是个通用教训：
 
-生产页面的严格 CSP 一个字没动（`curl -I /` 复验过）。
+1. 先放了 `connect-src *`（图省事）
+2. 收紧成"腾讯的几个域" → **进房直接挂**：`schedule failed: Failed to fetch`
+3. 看控制台，缺 `yun.tim.qq.com`（质量上报）→ 放宽到 `*.qq.com` → **还是挂**
+4. 再看，真正的调度域是 **`schedule.cloud-rtc.com` / `.net`**
+   ——**跟腾讯的命名毫无字面关系**，永远猜不到
+
+⚠️ **枚举第三方 SDK 的域名清单只能靠实测。** 每收紧一次就真的进一次房，
+看控制台的 CSP 违规。光"看起来合理"会在用户手里才炸——
+而那时候你已经不在现场了。
+
+### 门票（2026-09-07 补的一个真实的洞）
+
+`/voicekit/api/*` 和 `/voicekit/test` 原来**没有任何鉴权**。
+任何人找到 URL 就能拿到**任意 userId 的 UserSig**（= 冒充任何孩子进
+TRTC 房间）并无限起任务烧钱。noindex 挡不住这个。
+
+现在要 `?k=<VOICEKIT_UI_TOKEN>`（会种进 cookie，之后页面里的 fetch 不用带）。
+`/voicekit/healthz` 保持公开，监控要用。
+`/voicekit/v1/chat/completions` 仍走 `VOICEKIT_API_KEY` 的 bearer——
+那把钥匙写在 TRTC 的任务配置里、在腾讯那边留着副本，
+所以**给人用的门票必须是另一把**，能单独换。
+
+生产页面的严格 CSP 一个字没动（`curl -I /` 复验：`connect-src 'self'`）。
 
 ## 闸门实测（2026-09-05，两轮各 6 条真实场景）
 

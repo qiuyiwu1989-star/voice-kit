@@ -57,6 +57,10 @@ SDKSECRETKEY = _env("TRTC_SDKSECRETKEY")
 TOKENHUB_KEY = _env("TOKENHUB_API_KEY")
 API_KEY = _env("VOICEKIT_API_KEY")
 PUBLIC_URL = _env("VOICEKIT_PUBLIC_URL").rstrip("/")
+# 页面和管理接口的门票。**必须设**——没有它，任何人找到这个 URL 就能
+# 拿到任意 userId 的 UserSig（= 冒充任何孩子进 TRTC 房间）并无限起任务烧钱。
+# 这跟 VOICEKIT_API_KEY 是两回事：那个给 TRTC 回调用，这个给人用。
+UI_TOKEN = _env("VOICEKIT_UI_TOKEN")
 MODEL = os.environ.get("VOICEKIT_MODEL", "deepseek-v4-flash")
 
 # ---------------------------------------------------------------- 球球老师的配置
@@ -228,6 +232,20 @@ async def chat_completions(request: Request):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+COOKIE = "vk_ui"
+
+
+def _need_ui_auth(request: Request) -> None:
+    """人用的接口一律要门票。带 ?k= 或 cookie 都行。
+
+    刻意**不**复用 VOICEKIT_API_KEY——那把钥匙写在 TRTC 的任务配置里，
+    在腾讯那边留着副本；给人用的门票应该能单独换掉。
+    """
+    tok = request.query_params.get("k") or request.cookies.get(COOKIE)
+    if tok != UI_TOKEN:
+        raise HTTPException(401, "需要 ?k=<VOICEKIT_UI_TOKEN>")
+
+
 class SessionReq(BaseModel):
     room: str
     user: str
@@ -235,7 +253,8 @@ class SessionReq(BaseModel):
 
 
 @app.get("/voicekit/api/voices")
-def list_voices(user: Optional[str] = None):
+def list_voices(request: Request, user: Optional[str] = None):
+    _need_ui_auth(request)
     """音色库 + 这个用户当前选的。
 
     文字描述（"聊天女声"）跟实际听感差很远，所以页面要能当场 A/B。
@@ -307,7 +326,8 @@ def _clear_room(room: str) -> dict:
 
 
 @app.post("/voicekit/api/session")
-def start_session(req: SessionReq):
+def start_session(req: SessionReq, request: Request):
+    _need_ui_auth(request)
     """发 UserSig 并起 AI 对话任务。联调用，没有鉴权——测完就把服务停掉。
 
     实测踩过的坑（2026-09-05）：
@@ -367,7 +387,8 @@ def start_session(req: SessionReq):
 
 
 @app.post("/voicekit/api/stop")
-def stop_session(body: dict):
+def stop_session(body: dict, request: Request):
+    _need_ui_auth(request)
     from voice_kit.providers.base import ProviderError
     tid = body.get("task_id")
     for room, t in list(_tasks().items()):
@@ -381,18 +402,25 @@ def stop_session(body: dict):
 
 
 @app.post("/voicekit/api/clear")
-def clear_room(body: dict):
+def clear_room(body: dict, request: Request):
+    _need_ui_auth(request)
     """手动清场。停不掉的孤儿会如实报出来——它会一直计费到超时。"""
     return _clear_room(body["room"])
 
 
 @app.get("/voicekit/api/turns")
-def turns():
+def turns(request: Request):
+    _need_ui_auth(request)
     """闸门到底做了什么——页面轮询这个。"""
     return {"turns": TURNS}
 
 
 @app.get("/voicekit/test")
-def test_page():
-    return FileResponse(str(WEB / "trtc-test.html"),
-                        headers={"Cache-Control": "no-cache"})
+def test_page(request: Request):
+    """带对门票就把它种进 cookie，之后页面里的 fetch 不用每次带 ?k=。"""
+    _need_ui_auth(request)
+    r = FileResponse(str(WEB / "trtc-test.html"),
+                     headers={"Cache-Control": "no-cache"})
+    r.set_cookie(COOKIE, UI_TOKEN, max_age=86400, httponly=True,
+                 samesite="lax", secure=True, path="/voicekit")
+    return r
