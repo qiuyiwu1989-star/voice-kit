@@ -98,3 +98,53 @@ def get(voice_id: int) -> Optional[Voice]:
 def describe(voice_id: int) -> str:
     v = BY_ID.get(voice_id)
     return f"{v.name}（{v.gender}·{v.tier}·{v.scene}）" if v else f"未知音色 {voice_id}"
+
+
+# ---------------------------------------------------------------- 角色 → 默认音色
+#
+# 音色属于**角色**，不属于产品。同一个产品里可以有多个角色（球球老师、
+# 未来的学科助手、家长端的顾问），各自该有各自的声音。
+# 所以这张表按角色而不是按产品分。
+#
+# 用户可以覆盖（见 resolve()）——2026-09-07 用户拍板"音色可以用户自己选择
+# 切换，或者后台未来不同的角色有默认的音色配置"。两件事都在这里落地：
+# 表是默认，override 是用户选择，resolve 决定谁赢。
+
+ROLE_DEFAULTS = {
+    "qiuqiu":        502001,   # 球球老师 · 智小柔（女·超自然·聊天）——"好奇的大朋友"
+    "qiuqiu_male":   502006,   # 球球老师男声版 · 智小悟，给偏好男声的孩子
+    "coach":         602004,   # AI 教练 · 暖心阿灿（男·超自然）
+    "assistant":     501004,   # 通用助手 · 月华（女·大模型·聊天）
+}
+FALLBACK_VOICE = 502001
+
+
+def resolve(role: str = "qiuqiu", override=None) -> int:
+    """定这次该用哪个音色。
+
+    优先级：**用户的选择 > 角色默认 > 兜底**。
+
+    `override` 无效时**静默回落到角色默认**，不抛异常——音色是体验问题，
+    不该因为一个坏值让孩子那边完全没声音。但坏值也不能被当成有效值传给
+    腾讯：传一个不存在的 VoiceType，任务照起、文字照出、**一点声音都没有**
+    且零报错（2026-09-05 在 TTSConfig.AppId 上踩过同一类坑）。
+    """
+    if override is not None:
+        try:
+            vid = int(override)
+        except (TypeError, ValueError):
+            vid = None
+        if vid in BY_ID:
+            return vid
+    return ROLE_DEFAULTS.get(role, FALLBACK_VOICE)
+
+
+def role_options(role: str = "qiuqiu"):
+    """给这个角色可以选的音色列表——默认那个排在最前。
+
+    刻意**不返回全部 21 个**：让家长在 21 个里挑，等于把选型约束
+    （不要童声/不要解说腔）扔给不知情的人。候选是产品判断，不是配置项。
+    """
+    default = ROLE_DEFAULTS.get(role, FALLBACK_VOICE)
+    ids = [default] + [i for i in QIUQIU_SHORTLIST if i != default]
+    return [BY_ID[i] for i in ids if i in BY_ID]

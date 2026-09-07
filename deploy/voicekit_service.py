@@ -100,6 +100,33 @@ TTS_APPID = int(os.environ.get("TENCENT_APPID") or 0) or None
 # "你为什么是这个声音"。球球老师的人设是"好奇的大朋友"，用同龄童声
 # 等于自我矛盾。改成 502001「智小柔·超自然聊天女声」。见 voice_kit/voices.py。
 DEFAULT_VOICE = int(os.environ.get("VOICEKIT_TTS_VOICE") or 502001)
+
+# 每个孩子选的音色。**先落盘再说**——用户拍板"音色可以用户自己选择切换"，
+# 而这里存文件不是偷懒：生产的 TTS 现在还是 MiMo（音色编号体系完全不同），
+# 现在给 profiles 加一列腾讯 VoiceType 是给还没发生的事写 schema。
+# 等真的切过去，把这个 JSON 迁进 profiles 是十分钟的事。
+VOICE_FILE = Path("/opt/voicekit/voices.json")
+
+
+def _voice_prefs() -> dict:
+    try:
+        return json.loads(VOICE_FILE.read_text())
+    except Exception:
+        return {}
+
+
+def _save_voice(user: str, voice) -> None:
+    d = _voice_prefs()
+    if voice:
+        d[user] = int(voice)
+    else:
+        d.pop(user, None)
+    try:
+        VOICE_FILE.write_text(json.dumps(d))
+    except Exception:
+        pass
+
+
 trtc = TRTCConversation(TC_SECRET_ID, TC_SECRET_KEY, SDKAPPID, SDKSECRETKEY,
                         tts_app_id=TTS_APPID)
 
@@ -208,12 +235,18 @@ class SessionReq(BaseModel):
 
 
 @app.get("/voicekit/api/voices")
-def list_voices():
-    """音色库。文字描述跟实际听感差很远，所以页面要能当场 A/B。"""
+def list_voices(user: Optional[str] = None):
+    """音色库 + 这个用户当前选的。
+
+    文字描述（"聊天女声"）跟实际听感差很远，所以页面要能当场 A/B。
+    """
     from voice_kit import voices as V
+    chosen = _voice_prefs().get(user or "")
     return {
         "default": DEFAULT_VOICE,
-        "shortlist": [v.id for v in V.shortlist()],
+        "chosen": chosen,
+        "effective": V.resolve("qiuqiu", override=chosen),
+        "shortlist": [v.id for v in V.role_options("qiuqiu")],
         "voices": [{"id": v.id, "name": v.name, "gender": v.gender,
                     "tier": v.tier, "scene": v.scene, "note": v.note}
                    for v in V.ALL],
@@ -243,6 +276,17 @@ def _save_task(room: str, task_id) -> None:
         TASK_FILE.write_text(json.dumps(d))
     except Exception:
         pass
+
+
+def _effective_voice(user: str, requested) -> int:
+    """这次该用哪个音色：本次请求 > 这个用户上次选的 > 角色默认。
+
+    `voices.resolve` 保证返回值一定是真实存在的音色——传一个不存在的
+    VoiceType 给腾讯，任务照起、文字照出、**一点声音都没有且零报错**，
+    跟 TTSConfig.AppId 传错是同一类最难查的故障。
+    """
+    from voice_kit import voices as V
+    return V.resolve("qiuqiu", override=requested or _voice_prefs().get(user or ""))
 
 
 def _clear_room(room: str) -> dict:
@@ -295,6 +339,8 @@ def start_session(req: SessionReq):
             pass          # 不是 child_id（走简化配置）就用通用开场
 
     bot_id = f"bot-{uuid.uuid4().hex[:10]}"
+    if req.voice:
+        _save_voice(req.user, req.voice)      # 记住这次的选择，下次默认用它
     try:
         task_id = trtc.start(
             req.room,
@@ -305,7 +351,7 @@ def start_session(req: SessionReq):
             target_user_id=req.user,
             bot_user_id=bot_id,
             welcome_message=welcome,
-            tts_voice=req.voice or DEFAULT_VOICE,
+            tts_voice=_effective_voice(req.user, req.voice),
             max_idle_time=120,
             session_id=req.room,
         )

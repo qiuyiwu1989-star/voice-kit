@@ -187,7 +187,8 @@ async function refreshTurns(){
 
 (async () => {
   try{
-    const d = await (await fetch('/voicekit/api/voices')).json();
+    const uid0 = ($('user').value || '').trim();
+    const d = await (await fetch('/voicekit/api/voices?user=' + encodeURIComponent(uid0))).json();
     const sel = $('voice');
     sel.innerHTML = '';
     const short = new Set(d.shortlist);
@@ -198,12 +199,12 @@ async function refreshTurns(){
         const o = document.createElement('option');
         o.value = v.id;
         o.textContent = `${v.name}（${v.gender}·${v.tier}）${v.note ? ' — ' + v.note : ''}`;
-        if (v.id === d.default) o.selected = true;
+        if (v.id === (d.chosen || d.default)) o.selected = true;
         g.appendChild(o);
       });
       sel.appendChild(g);
     };
-    mk(d.voices.filter(v => short.has(v.id)), '给球球老师挑的（大朋友感）');
+    mk(d.voices.filter(v => short.has(v.id)), '给球球老师挑的（大朋友感）' + (d.chosen ? ' · 上次选的已记住' : ''));
     mk(d.voices.filter(v => !short.has(v.id)), '其余全部');
   }catch(e){ $('voice').innerHTML = '<option value="">音色列表加载失败</option>'; }
 })();
