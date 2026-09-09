@@ -162,6 +162,7 @@ function onCustomMessage(ev){
   }
 }
 
+let lastTurnCount = -1;
 async function refreshTurns(){
   try{
     const r = await fetch('/voicekit/api/turns');
@@ -169,6 +170,9 @@ async function refreshTurns(){
     $('turns').textContent = d.turns.length
       ? JSON.stringify(d.turns.slice(-6), null, 1) : '—';
     $('mTurns').textContent = d.turns.length;
+    // 有新一轮就说明人还在聊，把 idle 计时按回去。
+    // 不接这一下，正在对话中也会被 5 分钟闸门误杀。
+    if (d.turns.length !== lastTurnCount){ lastTurnCount = d.turns.length; touch(); }
     $('mGate').textContent = d.turns.filter(t => t.gated || t.took_over).length;
     const last = d.turns[d.turns.length - 1];
     if (last && last.first_token_ms) $('mLlm').textContent = Math.round(last.first_token_ms) + 'ms';
@@ -275,24 +279,63 @@ $('go').onclick = async () => {
         + '如果确实听不见，先看上面的音量条有没有跳——不跳才说明 TTS 那段没通。', true);
     }, 12000);
     poll = setInterval(refreshTurns, 1200);
+    startGuard();
   }catch(e){
     setState('失败：' + (e && e.message || e));
     $('go').disabled = false;
   }
 };
 
-$('end').onclick = async () => {
+// ——— 自动收尾：2026-09-09 查账查出来的 ———
+// 七天烧了 925 分钟，而全程只起过 8 个 AI 任务（每个任务 115 分钟，
+// 而 MaxIdleTime 是 60-120 **秒**）。所以烧掉的不是"聊天时长"，
+// 是**房间开着没人管**。
+//
+// 机制：TRTC 按"房间里每个用户每分钟"计费。机器人 idle 到点会自己走，
+// **但浏览器还留在房间里，继续按 1 个用户计费**——页面上什么都看不出来，
+// 音量条不跳、日志不动，跟已经结束了一模一样。
+//
+// 原来只在点「结束」和 pagehide 时收尾。标签页就那么开着的时候
+// pagehide 根本不触发，于是一开一整天。下面三道闸，任意一道到点就退房。
+const IDLE_MS   = 5 * 60 * 1000;    // 5 分钟没有新一轮对话
+const HIDDEN_MS = 60 * 1000;        // 切走标签页 1 分钟
+const HARD_MS   = 30 * 60 * 1000;   // 单次会话硬上限，兜底中的兜底
+let lastActive = 0, startedAt = 0, guard = null, hiddenAt = 0;
+
+function touch(){ lastActive = Date.now(); }
+
+async function endSession(why){
+  if (!trtc && !taskId) return;
   $('end').disabled = true;
-  clearInterval(poll);
+  clearInterval(poll); clearInterval(guard); guard = null;
   try { if (trtc) { await trtc.stopLocalAudio(); await trtc.exitRoom(); trtc.destroy(); } } catch(e){}
   try { if (taskId) await fetch('/voicekit/api/stop', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({task_id: taskId}) }); } catch(e){}
   trtc = null; taskId = null;
-  setState('已结束');
+  setState(why ? '已自动结束：' + why : '已结束');
+  if (why) flag('⏹ ' + why + '——房间已退出，不再计费。要继续就再点一次开始。', true);
   $('go').disabled = false;
   refreshTurns();
-};
+}
+
+function startGuard(){
+  startedAt = Date.now(); touch();
+  clearInterval(guard);
+  guard = setInterval(() => {
+    const now = Date.now();
+    if (document.hidden && hiddenAt && now - hiddenAt > HIDDEN_MS)
+      return endSession('标签页切走超过 1 分钟');
+    if (now - lastActive > IDLE_MS) return endSession('5 分钟没有新对话');
+    if (now - startedAt > HARD_MS)  return endSession('单次会话已满 30 分钟');
+  }, 10000);
+}
+
+document.addEventListener('visibilitychange', () => {
+  hiddenAt = document.hidden ? Date.now() : 0;
+});
+
+$('end').onclick = () => endSession('');
 
 // 直接关页面时也要收尾。不收的话任务会一直跑到 idle 超时，期间一直计费，
 // 而且我们这边的 TaskId 一丢就再也停不掉了（Stop 只认 TaskId）。
