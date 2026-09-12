@@ -42,6 +42,7 @@ import re
 from .gate import InputGate, OutputGate
 from .openai_server import _chunk, _sse
 from .tenants import Registry, Tenant
+from . import hotwords as HW
 from . import voices as V
 
 
@@ -198,11 +199,21 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
 
     @app.post("/v1/audio/transcriptions")
     async def transcribe(file: UploadFile = File(...),
+                         hotwords: str = Form(""),
                          authorization: str = Header(None)):
-        who(authorization)
+        """转写。**带这个项目的热词**——孩子说的多半是专有名词。
+
+        `hotwords` 是本次会话**额外**的词（孩子的名字、他刚提到的宠物），
+        逗号分隔。这类词比任何静态词表都值钱：词表覆盖"大多数孩子会说
+        什么"，它覆盖"这个孩子会说什么"。超预算时先砍静态的。
+        """
+        t = who(authorization)
         audio = await file.read()
         fmt = (file.filename or "a.wav").rsplit(".", 1)[-1].lower()
-        r = tencent.transcribe(audio, fmt if fmt in ("wav", "mp3", "pcm") else "wav")
+        extra = [HW.Hotword(w.strip(), 11)
+                 for w in hotwords.split(",") if w.strip()]
+        r = tencent.transcribe(audio, fmt if fmt in ("wav", "mp3", "pcm") else "wav",
+                               hotwords=HW.build(t.voice_role, extra))
         return {"text": r.text, "duration_ms": r.duration_ms,
                 "elapsed_ms": r.elapsed_ms}
 

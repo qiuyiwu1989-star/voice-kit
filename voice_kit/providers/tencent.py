@@ -106,7 +106,8 @@ class TencentProvider:
 
     # ---------------------------------------------------------------- 一次性 ASR
 
-    def transcribe(self, audio: bytes, fmt: str = "wav", **kw) -> ASRResult:
+    def transcribe(self, audio: bytes, fmt: str = "wav", *,
+                   hotwords: str = "", **kw) -> ASRResult:
         """一句话识别（≤60 秒）。留着做对照组和兜底——
         流式连接建不起来时还能降级到这条，不至于整个语音功能挂掉。"""
         if not audio or len(audio) < 200:
@@ -118,6 +119,8 @@ class TencentProvider:
             "VoiceFormat": fmt,
             "Data": base64.b64encode(audio).decode(),
             "DataLen": len(audio),
+            # 临时热词：云端不保留，词表跟着代码走（见 voice_kit/hotwords.py）
+            **({"HotwordList": hotwords} if hotwords else {}),
         })
         from .mimo import wav_duration_ms
         return ASRResult(text=(d.get("Result") or "").strip(),
@@ -127,7 +130,7 @@ class TencentProvider:
 
     # ---------------------------------------------------------------- 流式 ASR
 
-    def _realtime_url(self, voice_id: str) -> str:
+    def _realtime_url(self, voice_id: str, hotwords: str = "") -> str:
         """实时语音识别的 WebSocket 地址。
 
         ⚠️ 这里用的是 **HMAC-SHA1 + base64**，跟上面 TC3-HMAC-SHA256 完全不同。
@@ -148,15 +151,23 @@ class TencentProvider:
             "filter_punc": "0",
             "convert_num_mode": "1",
         }
+        if hotwords:
+            params["hotword_list"] = hotwords
         qs = "&".join(f"{k}={params[k]}" for k in sorted(params))
         path = f"asr.cloud.tencent.com/asr/v2/{self.app_id}"
         sig = base64.b64encode(
             hmac.new(self.secret_key.encode(), f"{path}?{qs}".encode(), hashlib.sha1).digest()
         ).decode()
-        return f"wss://{path}?{qs}&signature={urllib.parse.quote(sig)}"
+        # ⚠️ 跟 TTS 那条一样：**签名用未编码的原始值，拼 URL 时才 urlencode**。
+        # 先编码再签会 401。以前这里直接把 qs 拼回去也没事，因为所有值都是
+        # ASCII；hotword_list 带中文和 `|`，不编码就是个坏 URL，
+        # 而编码后再签名又对不上——所以必须是"签原文、发编码"这个顺序。
+        encoded = "&".join(f"{k}={urllib.parse.quote(params[k], safe='')}"
+                           for k in sorted(params))
+        return f"wss://{path}?{encoded}&signature={urllib.parse.quote(sig, safe='')}"
 
     async def stream(self, audio_chunks, *, sample_rate: int = 16000,
-                     fmt: str = "pcm16", **kw):
+                     fmt: str = "pcm16", hotwords: str = "", **kw):
         """边送音频边收文字。
 
         产出 ASRPartial：is_final=False 是中间结果（可以显示但别拿去喂 LLM），
@@ -171,7 +182,7 @@ class TencentProvider:
                                 "流式 ASR 需要 websockets 包：pip install websockets") from e
 
         voice_id = f"vk{int(time.time() * 1000)}{random.randint(100, 999)}"
-        url = self._realtime_url(voice_id)
+        url = self._realtime_url(voice_id, hotwords)
         t0 = time.perf_counter()
         try:
             async with websockets.connect(url, open_timeout=10, close_timeout=5) as ws:
