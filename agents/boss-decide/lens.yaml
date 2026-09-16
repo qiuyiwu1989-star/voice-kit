@@ -1,0 +1,8 @@
+read:
+  facts: [event, attempt]
+  signals: [arrival, narrative, delivery]
+  recap: cross_occasion
+  judgments: own
+  quotes: true
+write:
+  judgments: [arrival, narrative, delivery]

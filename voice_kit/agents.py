@@ -350,6 +350,12 @@ def validate(ag: Agent, *, author_level: str = "L0",
         out.append(Issue("manifest.yaml", "version 要是 x.y.z"))
     if m.get("kind") not in KINDS:
         out.append(Issue("manifest.yaml", f"kind 只能是 {KINDS}"))
+    # 音色：数字 id 不在音色表里时，语音合成会静默换成默认嗓子，零报错（2026-09-16 两个「老板」差点同声）
+    v = m.get("voice")
+    if isinstance(v, int) or (isinstance(v, str) and v.strip().isdigit()):
+        from . import voices as _V
+        if int(v) not in _V.BY_ID:
+            out.append(Issue("manifest.yaml", f"voice {v} 不在音色表里，合成时会被换成默认嗓子；先在 voices.py 登记", "warn"))
     if m.get("read_level") not in READ_LEVELS:
         out.append(Issue("manifest.yaml", f"read_level 只能是 {READ_LEVELS}"))
     elif READ_LEVELS.index(m["read_level"]) < READ_LEVELS.index(author_level):

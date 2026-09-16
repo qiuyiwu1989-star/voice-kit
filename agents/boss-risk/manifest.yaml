@@ -1,0 +1,29 @@
+id: boss-risk
+name: 风险前置 · 追着问细节的老板
+name_en: Risk First · The Boss Who Probes
+short_name: 老板
+version: 1.0.0
+kind: config
+status: production
+archetype: 教练
+blurb: 跟老板提方案：先证明你已经想清楚了
+blurb_en: "Pitch it to your boss: show you've already thought it through."
+audience:
+  product: coach
+  bands: [adult]
+mode: video   # 用户端默认：video / voice / text，页面上可切
+shells:   # 这个 agent 服务 AI 教练的哪些壳（真源在这里）
+  - boss-risk
+read_level: L0
+rails: no_scoring
+model: deepseek-v4-flash
+turn_limit: {sentences: 2, chars: 60, feedback_sentences: 4, feedback_chars: 160}
+voice: 601002   # 沿用 AI 教练 seed-agent-boss.ts 的选择：和「结论先行」听得出是两个人
+layers: [persona.md, method.md, playbook.md]
+updated_at: 2026-09-16
+notes: >-
+  1.0.0（2026-09-16）从 AI 教练的老状态机（scripts/seed-agent-boss.ts，打电话策略 + 五页判据）
+  搬成配置级自由对话，用户要求「风险前置、结论先行都要改成新的自由对话」。
+  五条判据搬进 method.md 作为听的框架；通话结束后的判据复盘仍在 AI 教练里。
+  判据是手写的（probeSource=HAND），不是署名专家的方法论，对外售卖前需要署名的人重做。
+  和「结论先行」刻意方向相反：那个关心你要我做什么，这个关心你想清楚了没有。

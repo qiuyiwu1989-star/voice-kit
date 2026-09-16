@@ -543,3 +543,22 @@ def test_missing_english_is_a_warn_not_a_fail(root):
     assert not [i for i in issues if "缺英文" in i.message and "name_en" in i.message]
     # 两项都写了 → 没有「缺英文」
     assert not [i for i in A.validate(A.load_agent(root / "kefu-xiaoan")) if "缺英文" in i.message]
+
+
+def test_unknown_numeric_voice_warns_and_boss_agents_are_clean(root):
+    """表里没有的音色会被静默换成默认嗓子——校验要亮 warn。两个老板 agent 用的音色已登记。"""
+    for aid in ("boss-decide", "boss-risk"):
+        iss = A.validate(A.load_agent(root / aid))
+        assert not [i for i in iss if i.severity == "fail"], (aid, iss)
+        assert not [i for i in iss if "音色表" in i.message], aid
+    _edit_manifest(root, "boss-risk", voice=999999)
+    iss = A.validate(A.load_agent(root / "boss-risk"))
+    assert any(i.severity == "warn" and "音色表" in i.message for i in iss)
+
+
+def test_boss_agents_claim_their_shells_and_differ():
+    from pathlib import Path as _P
+    ags = {a.id: a for a in A.load_all(_P(__file__).parent.parent / "agents")}
+    owners = A.shell_owners(list(ags.values()))
+    assert owners["boss-decide"] == ["boss-decide"] and owners["boss-risk"] == ["boss-risk"]
+    assert ags["boss-decide"].manifest["voice"] != ags["boss-risk"].manifest["voice"]   # 换 agent 要听得出换了人
