@@ -1,0 +1,19 @@
+id: qiuqiu
+name: 球球老师
+version: 1.0.0
+kind: code
+run: local  # 上游 /v1/chat/completions 还没在球球 backend 暴露；先按六层文件本地跑，人设能试。上游好了删掉这行
+status: production
+archetype: 陪伴者
+audience:
+  product: qiuqiu
+  bands: [preschool, low, mid, high]
+mode: voice   # 用户端默认：video / voice / text，页面上可切
+read_level: L0
+rails: child_strict
+voice: 502001
+layers: [persona.md, method.md, playbook.md]
+upstream:
+  url: https://qiuqiu.yongle.school/v1/chat/completions
+  hooks: https://qiuqiu.yongle.school/v1/agent/hooks
+notes: 生产真源仍是 球球老师/agent/system-prompt.md（38k 字，六层混在一起）。这里的三个 md 是按层拆出来的摘要，拆分完成前以那份为准。

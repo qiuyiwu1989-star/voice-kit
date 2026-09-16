@@ -1,0 +1,8 @@
+read:
+  facts: [event, preference, constraint, relation, attempt]
+  signals: [curiosity, persistence, problem_solving, expression, social, self_awareness]
+  recap: cross_occasion
+  judgments: all        # 读 E1–E4 的分片，收敛它们
+  quotes: true
+write:
+  judgments: [synthesis]

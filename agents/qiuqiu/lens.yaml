@@ -1,0 +1,11 @@
+read:
+  facts: [event, preference, constraint, relation, attempt]
+  signals: [curiosity, persistence, problem_solving, expression, social]
+  recap: last_session
+  judgments: own
+  quotes: true          # L0 才允许
+  parent_signals: true
+write:
+  judgments: [curiosity, persistence, problem_solving, expression, social, self_awareness]
+sampling:
+  every_turns: 3

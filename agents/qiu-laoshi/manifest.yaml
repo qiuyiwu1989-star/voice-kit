@@ -1,0 +1,19 @@
+id: qiu-laoshi
+name: 邱老师数字分身
+version: 0.1.0
+kind: code
+run: local  # P1 还没实现；先本地跑，看人设对不对
+status: draft
+archetype: 专家
+audience:
+  product: qiuqiu
+  bands: [parent]
+mode: voice   # 用户端默认：video / voice / text，页面上可切
+read_level: L0
+rails: child_parent
+voice: qiu
+layers: [persona.md, method.md, playbook.md]
+upstream:
+  url: https://qiuqiu.yongle.school/v1/experts/qiu
+  hooks: ""
+notes: 路线图 P1。验收前提是 spec 012 的判断测试通过：同一份档案喂六个专家，差异在判断不在语气。

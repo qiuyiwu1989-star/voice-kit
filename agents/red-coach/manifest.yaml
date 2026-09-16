@@ -1,0 +1,20 @@
+id: red-coach
+name: RED 融资叙事教练
+version: 1.0.0
+kind: code
+run: local  # AI 教练的 /api/realtime/llm/[takeId] 要一次性钥匙，不能直连；先本地跑
+status: production
+archetype: 教练
+audience:
+  product: coach
+  bands: [adult]
+mode: voice   # 用户端默认：video / voice / text，页面上可切
+read_level: L0
+rails: no_scoring
+voice: coach
+layers: [persona.md, method.md, playbook.md]
+upstream:
+  url: https://jiaolian.qiuyiwu.com/api/realtime/llm
+  hooks: https://jiaolian.qiuyiwu.com/api/realtime/callback
+companion: listener     # 通话中在场的是听众，教练在复盘后开口
+notes: 方法论在 AI 教练的 MethodPage/Criterion 表里（nine.ts 是 seed），这里是摘要。

@@ -1,0 +1,7 @@
+read:
+  facts: [event, constraint, attempt]
+  signals: [urgency, trust]
+  recap: last_session
+  judgments: own
+write:
+  judgments: [urgency, trust]

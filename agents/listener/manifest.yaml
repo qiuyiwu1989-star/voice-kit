@@ -1,0 +1,15 @@
+id: listener
+name: 听众
+version: 1.0.0
+kind: config
+status: production
+archetype: 最小 agent
+audience:
+  product: coach
+  bands: [adult]
+mode: voice   # 用户端默认：video / voice / text，页面上可切
+read_level: L2
+rails: listener_forbidden
+voice: coach
+layers: [persona.md, method.md, playbook.md]
+notes: 无记忆、无名无脸、只描述。每一次都是第一次听。零社交成本来自这里。
