@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用户记忆 · 后台</title>
+<style>
+:root{--bg:#F5F6F8;--paper:#fff;--ink:#1B2028;--ink2:#4B5563;--ink3:#7B8494;--line:#DCE0E6;--line2:#C5CAD3;
+  --acc:#1E6B5A;--accbg:#E4F1EC;--warn:#8A5A00;--warnbg:#FBF1DA;--bad:#9B2C2C;--badbg:#FBE5E5;--mono:#EEF1F4}
+@media (prefers-color-scheme:dark){:root{--bg:#13161B;--paper:#1A1E25;--ink:#E7EAF0;--ink2:#B4BAC6;--ink3:#7F8795;--line:#2A2F38;--line2:#3A414C;
+  --acc:#5FBFA4;--accbg:#16302A;--warn:#E3B45B;--warnbg:#2E2412;--bad:#E38484;--badbg:#331A1A;--mono:#22272F}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif}
+button{font:inherit;cursor:pointer;border:1px solid var(--line2);background:var(--paper);color:var(--ink);padding:5px 11px;border-radius:4px}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+button.danger{color:var(--bad);border-color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line2);border-radius:4px;padding:5px 8px}
+#app{display:grid;grid-template-columns:300px 1fr;min-height:100dvh}
+@media (max-width:820px){#app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}}
+aside{border-right:1px solid var(--line);background:var(--paper);padding:18px 16px}
+nav.top{display:flex;gap:4px;margin:0 0 14px;font-size:13px}
+nav.top a{padding:4px 10px;border-radius:4px;color:var(--ink2);text-decoration:none;border:1px solid transparent}
+nav.top a.on{border-color:var(--line2);background:var(--bg);color:var(--ink);font-weight:600}
+aside h1{font-size:15px;margin:0 0 8px}
+.u{display:block;width:100%;text-align:left;padding:9px 11px;border:1px solid transparent;background:none;border-radius:6px;margin-bottom:4px}
+.u:hover{background:var(--bg)}
+.u.on{border-color:var(--line2);background:var(--bg)}
+.u b{display:block;font-size:14px}
+.u small{color:var(--ink3);font-size:12px}
+.pill{display:inline-block;font-size:11px;padding:0 7px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);margin-right:4px;white-space:nowrap}
+.pill.acc{background:var(--accbg);color:var(--acc);border-color:transparent}
+.pill.warn{background:var(--warnbg);color:var(--warn);border-color:transparent}
+main{padding:24px 32px 64px;max-width:1080px}
+.head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.head h2{margin:0;font-size:22px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.grow{flex:1}
+.hint{font-size:12px;color:var(--ink3)}
+.iss{padding:8px 12px;border-left:3px solid var(--warn);background:var(--warnbg);margin:10px 0;font-size:13px}
+.iss.bad{border-left-color:var(--bad);background:var(--badbg)}
+section.blk{margin-top:26px;padding-top:14px;border-top:1px solid var(--line)}
+section.blk h3{margin:0 0 8px;font-size:15px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink3);font-weight:500;font-size:12px}
+.tw{overflow-x:auto}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.card{border:1px solid var(--line);background:var(--paper);padding:10px 12px;margin:8px 0}
+.card .txt{white-space:pre-wrap;margin-top:4px}
+.turns{border:1px solid var(--line);background:var(--paper);padding:10px 12px;max-height:50vh;overflow:auto;margin:6px 0}
+.t{display:grid;grid-template-columns:52px 64px 1fr;gap:8px;font-size:13px;padding:2px 0}
+.t i{font-style:normal;color:var(--ink3)} .t b{color:var(--ink3);font-weight:500}
+.t.bot span{color:var(--ink2)}
+#toast{position:fixed;right:16px;bottom:16px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s}
+#toast.show{opacity:1}
+dialog{border:1px solid var(--line2);border-radius:8px;background:var(--paper);color:var(--ink);padding:20px 22px;min-width:360px;max-width:92vw}
+dialog label{display:block;font-size:12px;color:var(--ink3);margin-top:10px}
+dialog input,dialog select{width:100%}
+</style>
+</head>
+<body>
+<div id="app">
+<aside>
+  <nav class="top"><a href="/admin/agents">Agent 人设库</a><a href="/admin/memory" class="on">用户记忆</a></nav>
+  <h1>用户记忆</h1>
+  <div class="bar"><label class="hint">产品 <select id="product"></select></label></div>
+  <div id="roNote"></div>
+  <div id="list"><p class="hint">读取中…</p></div>
+  <p class="hint" style="margin-top:18px">记忆按产品分开存：<code>users/&lt;产品&gt;/&lt;uid&gt;/</code>。<br>
+    uid 目前是用户自报的名字，不是登录身份。<br>每次改 / 删 / 导出都会写审计。</p>
+</aside>
+<main id="main"><p class="hint">选一个用户。</p></main>
+</div>
+<div id="toast"></div>
+
+<dialog id="dlgFact">
+  <form method="dialog" id="formFact">
+    <b>改事实</b>
+    <p class="hint">事实只有一份、不属于任何 agent——这里改的是平台记住的那一份，所有 agent 下次读到的都是改后的。</p>
+    <label>类别<select name="category" id="factCat"></select></label>
+    <label>内容<input name="content" id="factContent" required></label>
+    <div class="bar" style="margin-top:14px;justify-content:flex-end"><button type="button" onclick="dlgFact.close()">取消</button><button class="p" value="ok">保存</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgDel">
+  <form method="dialog" id="formDel">
+    <b>删除这个用户的全部记忆</b>
+    <p class="hint">对话、事实、各 agent 的判断、综合复盘全部删掉，不能恢复。审计里只留条数。<br>
+      确认的话，输入这个用户的 uid：<code id="delUid"></code></p>
+    <label>uid<input id="delConfirm" autocomplete="off"></label>
+    <div class="bar" style="margin-top:14px;justify-content:flex-end"><button type="button" onclick="dlgDel.close()">取消</button><button class="danger" value="ok" id="btnDelOk" disabled>删除</button></div>
+  </form>
+</dialog>
+
+<script>
+const API = '/admin/memory/api';
+let META = null, PRODUCT = 'talk', USERS = [], CUR = null;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const enc = encodeURIComponent;
+const pill = (t,c='') => `<span class="pill ${c}">${esc(t)}</span>`;
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2400); }
+async function api(path, opt={}){
+  const r = await fetch(API+path, {headers:{'Content-Type':'application/json'}, ...opt});
+  if(!r.ok){ let d=''; try{d=(await r.json()).detail}catch(e){} throw new Error(d||('HTTP '+r.status)); }
+  return r.json();
+}
+const userPath = () => '/users/'+enc(CUR.summary.product)+'/'+enc(CUR.summary.uid);
+const readonly = () => META && META.readonly.includes(PRODUCT);
+function saveProduct(p){ try{ localStorage.setItem('vk_mem_product', p); }catch(e){} }
+function loadProduct(){ try{ return localStorage.getItem('vk_mem_product'); }catch(e){ return null; } }
+
+async function loadList(){
+  const d = await api('/users?product='+enc(PRODUCT)); USERS = d.users;
+  $('#roNote').innerHTML = d.readonly ? `<div class="iss">儿童数据的修改流程还没定，先只读：这里不能改、不能删、不能导出。</div>` : '';
+  $('#list').innerHTML = USERS.length ? USERS.map(u => `<button class="u ${CUR&&CUR.summary.uid===u.uid&&CUR.summary.product===PRODUCT?'on':''}" data-uid="${esc(u.uid)}">
+    <b>${esc(u.uid)} ${u.legacy?pill('旧目录','warn'):''}</b>
+    <small>${u.sessions} 场 · ${u.facts} 条事实 · 最近 ${esc((u.last_at||'—').replace('T',' ').slice(0,16))}</small><br>
+    <small>${u.agents.map(esc).join('、')||'—'}</small></button>`).join('')
+    : '<p class="hint">这个产品下还没有用户记忆。</p>';
+  document.querySelectorAll('.u').forEach(b => b.onclick = () => open(b.dataset.uid));
+}
+
+async function open(uid){
+  try{ CUR = await api('/users/'+enc(PRODUCT)+'/'+enc(uid)); render(); loadList(); }
+  catch(e){ toast('打不开：'+e.message); }
+}
+
+function when(s){ return esc(String(s||'').replace('T',' ').slice(0,16)); }
+
+function render(){
+  const a = CUR, s = a.summary, ro = a.readonly;
+  const facts = a.facts, js = a.judgments || {};
+  $('#main').innerHTML = `
+  <div class="head"><h2>${esc(s.uid)}</h2><span class="mono hint">${esc(s.product)}</span>
+    ${ro?pill('只读','warn'):''} ${s.legacy?pill('还在旧目录 users/'+s.uid+'/，第一次写入时自动挪进 talk','warn'):''}</div>
+  <p class="hint">${s.sessions} 场对话 · ${s.facts} 条事实 · ${s.judgments} 条判断 · ${s.reviews} 次综合复盘 · 最近 ${when(s.last_at)} · 用过：${s.agents.map(esc).join('、')||'—'}</p>
+  ${ro?`<div class="iss">儿童数据的修改流程还没定，先只读。</div>`:''}
+  <div class="bar">
+    ${ro?'':`<button id="btnExport">导出全部记忆 JSON ↓</button><span class="grow"></span><button class="danger" id="btnDelUser">删除这个用户…</button>`}
+  </div>
+
+  <section class="blk"><h3>对话记录（${a.sessions.length}）</h3>
+    ${a.sessions.length?`<div class="tw"><table><tr><th>时间</th><th>agent</th><th>来回</th><th>开头</th><th></th></tr>${a.sessions.map(x=>`<tr>
+      <td class="mono">${when(x.at)}</td><td>${esc(x.agent_name||x.agent)}</td><td>${x.user_turns}</td><td>${esc(x.opening)}</td>
+      <td><button data-file="${esc(x.file)}" class="openS">看逐句</button></td></tr>
+      <tr hidden id="s-${esc(x.file)}"><td colspan="5"></td></tr>`).join('')}</table></div>`:'<p class="hint">没有。</p>'}
+  </section>
+
+  <section class="blk"><h3>事实（${facts.length}）</h3>
+    <p class="hint">只有一份，agent 中立：平台从对话里抽，所有 agent 读同一份。${ro?'':'可以改内容和类别，也可以删单条。'}</p>
+    ${facts.length?`<div class="tw"><table><tr><th>类别</th><th>内容</th><th>原话</th><th>次数</th><th>首次 / 最近</th><th></th></tr>${facts.map(f=>`<tr>
+      <td class="mono">${esc(f.category)}</td><td>${esc(f.content)}${f.edited_at?` ${pill('后台改过')}`:''}</td><td class="hint">${esc(f.quote||'')}</td>
+      <td>${f.seen||1}</td><td class="mono">${esc(f.first_at||'')} / ${esc(f.last_at||'')}</td>
+      <td style="white-space:nowrap">${ro?'':`<button class="editF" data-i="${f.index}">改</button> <button class="delF danger" data-i="${f.index}">删</button>`}</td></tr>`).join('')}</table></div>`:'<p class="hint">没有。</p>'}
+  </section>
+
+  <section class="blk"><h3>判断（按 agent 分片）</h3>
+    <p class="hint">每个 agent 用自己的方法论读同一批事实，读法各自存、互不覆盖。判断是 agent 当时的原话，<b>只能删，不能改</b>——改写等于替它伪造读法。</p>
+    ${Object.keys(js).length?Object.entries(js).map(([aid,arr])=>`<h4 style="margin:14px 0 4px">${esc(aid)} <span class="hint">（${arr.length}）</span></h4>
+      ${arr.map((j,i)=>({j,i})).reverse().map(({j,i})=>`<div class="card"><div class="bar" style="margin:0"><span class="hint mono">${when(j.at)} · 场次 ${esc(j.session_id||'')}</span><span class="grow"></span>
+        ${ro?'':`<button class="delJ danger" data-a="${esc(aid)}" data-i="${i}">删</button>`}</div><div class="txt">${esc(j.text)}</div></div>`).join('')}`).join('')
+      :'<p class="hint">没有。</p>'}
+  </section>
+
+  <section class="blk"><h3>综合复盘（${a.reviews.length}）</h3>
+    ${a.reviews.length?a.reviews.map(r=>`<div class="card"><div class="hint mono">${when(r.at)} · ${esc(r.method_label||r.method)}${r.agent?' · '+esc(r.agent):''} · ${(r.session_ids||[]).length} 场</div><div class="txt">${esc(r.text)}</div></div>`).join(''):'<p class="hint">没有。</p>'}
+  </section>
+
+  <section class="blk"><h3>审计（这个用户相关，${a.audit.length}）</h3>
+    ${a.audit.length?`<div class="tw"><table><tr><th>时间</th><th>谁</th><th>操作</th><th>对象</th><th>改前</th><th>改后</th></tr>${a.audit.map(x=>`<tr>
+      <td class="mono">${when(x.at)}</td><td>${esc(x.actor)}</td><td class="mono">${esc(x.action)}</td><td class="mono">${esc(x.target)}</td>
+      <td class="hint">${esc(x.before?JSON.stringify(x.before):'')}</td><td class="hint">${esc(x.after?JSON.stringify(x.after):'')}</td></tr>`).join('')}</table></div>`:'<p class="hint">后台还没动过这个用户的记忆。</p>'}
+  </section>`;
+  bind();
+}
+
+function bind(){
+  document.querySelectorAll('.openS').forEach(b => b.onclick = async () => {
+    const row = document.getElementById('s-'+b.dataset.file);
+    if(!row.hidden){ row.hidden = true; return; }
+    try{
+      const s = await api(userPath()+'/sessions/'+enc(b.dataset.file));
+      row.firstElementChild.innerHTML = `<div class="turns">${(s.turns||[]).map(t=>`<div class="t ${t.role==='bot'?'bot':''}"><i class="mono">${esc(t.t||'')}</i><b>${t.role==='bot'?esc(s.agent_name||s.agent):'用户'}</b><span>${esc(t.text)}</span></div>`).join('')}</div>
+        ${s.review?`<div class="card"><div class="hint">该场回顾（${[s.agent_name||s.agent, s.version?'v'+s.version:'', s.model||''].filter(Boolean).map(esc).join(' · ')}）</div><div class="txt">${esc(s.review)}</div></div>`:''}`;
+      row.hidden = false;
+    }catch(e){ toast('读不出来：'+e.message); }
+  });
+  document.querySelectorAll('.editF').forEach(b => b.onclick = () => {
+    const f = CUR.facts[+b.dataset.i];
+    $('#factCat').innerHTML = META.fact_categories.map(c=>`<option ${c===f.category?'selected':''}>${esc(c)}</option>`).join('');
+    $('#factContent').value = f.content;
+    $('#formFact').dataset.i = b.dataset.i; dlgFact.showModal();
+  });
+  document.querySelectorAll('.delF').forEach(b => b.onclick = async () => {
+    const f = CUR.facts[+b.dataset.i];
+    if(!confirm('删掉这条事实？\n['+f.category+'] '+f.content)) return;
+    await mutate('/facts/'+f.index, {method:'DELETE', body: JSON.stringify({expect:{category:f.category, content:f.content}})}, '已删');
+  });
+  document.querySelectorAll('.delJ').forEach(b => b.onclick = async () => {
+    const j = CUR.judgments[b.dataset.a][+b.dataset.i];
+    if(!confirm('删掉 '+b.dataset.a+' 在 '+(j.at||'')+' 的这条判断？')) return;
+    await mutate('/judgments/'+enc(b.dataset.a)+'/'+b.dataset.i, {method:'DELETE', body: JSON.stringify({expect_at: j.at||''})}, '已删');
+  });
+  const ex = $('#btnExport');
+  if(ex) ex.onclick = async () => {
+    try{
+      const r = await fetch(API+userPath()+'/export');
+      if(!r.ok){ let d=''; try{d=(await r.json()).detail}catch(e){} throw new Error(d||('HTTP '+r.status)); }
+      const blob = await r.blob(); const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'memory-'+CUR.summary.product+'-'+CUR.summary.uid+'.json'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+      await open(CUR.summary.uid); toast('已导出（记进了审计）');
+    }catch(e){ toast('导出失败：'+e.message); }
+  };
+  const du = $('#btnDelUser');
+  if(du) du.onclick = () => { $('#delUid').textContent = CUR.summary.uid; $('#delConfirm').value=''; $('#btnDelOk').disabled = true; dlgDel.showModal(); };
+}
+
+async function mutate(sub, opt, msg){
+  try{ await api(userPath()+sub, opt); await open(CUR.summary.uid); toast(msg); }
+  catch(e){ toast('没成：'+e.message); if(/变了/.test(e.message)) open(CUR.summary.uid); }
+}
+
+$('#formFact').onsubmit = async (e) => {
+  if(!e.submitter || e.submitter.value!=='ok') return;
+  const f = CUR.facts[+e.target.dataset.i];
+  await mutate('/facts/'+f.index, {method:'PATCH', body: JSON.stringify({expect:{category:f.category, content:f.content},
+    category: $('#factCat').value, content: $('#factContent').value})}, '已改');
+};
+$('#delConfirm').oninput = () => { $('#btnDelOk').disabled = $('#delConfirm').value !== CUR.summary.uid; };
+$('#formDel').onsubmit = async (e) => {
+  if(!e.submitter || e.submitter.value!=='ok') return;
+  try{
+    const d = await api(userPath(), {method:'DELETE', body: JSON.stringify({confirm: $('#delConfirm').value})});
+    CUR = null; $('#main').innerHTML = `<p class="hint">已删除：${d.deleted.sessions} 场对话、${d.deleted.facts} 条事实、${d.deleted.judgments} 条判断、${d.deleted.reviews} 次复盘。</p>`;
+    loadList(); toast('已删除');
+  }catch(err){ toast('删除失败：'+err.message); }
+};
+$('#product').onchange = () => { PRODUCT = $('#product').value; saveProduct(PRODUCT); CUR = null; $('#main').innerHTML = '<p class="hint">选一个用户。</p>'; loadList(); };
+
+(async () => {
+  META = await api('/products');
+  const saved = loadProduct();
+  PRODUCT = META.products.includes(saved) ? saved : META.default;
+  $('#product').innerHTML = META.products.map(p => `<option value="${esc(p)}" ${p===PRODUCT?'selected':''}>${esc(p)}${META.readonly.includes(p)?'（只读）':''}</option>`).join('');
+  await loadList();
+})().catch(e => { $('#main').innerHTML = `<div class="iss bad">${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>

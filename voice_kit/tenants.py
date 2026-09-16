@@ -60,6 +60,13 @@ class Tenant:
     max_tokens: int = 1024
     # 可选：把这个租户的每一轮交给宿主应用处理（落库/采样/报告）
     hook: str = ""
+    # 用户记忆落在哪个产品命名空间（users/<product>/<uid>/）。缺省 = 租户 id。
+    # 什么时候要单独写：一个产品换钥匙开了第二个租户（比如 coach-staging），记忆仍要归 coach。
+    product: str = ""
+
+    @property
+    def memory_product(self) -> str:
+        return self.product or self.id
 
     def check(self) -> None:
         if self.output_rules and not self.fallback_reply:
@@ -113,6 +120,7 @@ class Registry:
                 voice_role=t.get("voice_role", "assistant"),
                 max_tokens=int(t.get("max_tokens", 1024)),
                 hook=t.get("hook", ""),
+                product=t.get("product", ""),
             )
             tenant.check()          # 配错了在加载时就炸，不要等到线上有人调
             by_id[tenant.id] = tenant
