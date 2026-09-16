@@ -175,10 +175,10 @@ def test_memory_admin_requires_admin_ticket(app, root, monkeypatch):
     assert TestClient(app, cookies={"vk_ui": "go"}).get("/admin/memory/api/users").status_code == 401
     assert TestClient(app, headers={"Authorization": "Bearer ck"}).get("/admin/memory/api/users").status_code == 401
     r = c.get("/admin/memory?k=door")
-    assert r.status_code == 200 and "用户记忆" in r.text and "/admin/agents" in r.text and "vk_admin" in r.cookies
+    assert r.status_code == 200 and "用户记忆" in r.text and "/admin/static/vk-shell.js" in r.text and "vk_admin" in r.cookies
     assert c.get("/admin/memory/api/users").status_code == 200   # cookie 生效
     # Agent 后台照常，且有入口过来
-    assert "/admin/memory" in admin(app).get("/admin/agents").text
+    assert "/admin/static/vk-shell.js" in admin(app).get("/admin/agents").text     # 导航由共享外壳渲染
     assert admin(app).get("/admin/agents/api/list").status_code == 200
     assert c.get("/admin", follow_redirects=False).headers["location"].startswith("/admin/agents")
     monkeypatch.delenv("VOICEKIT_ADMIN_TOKEN")

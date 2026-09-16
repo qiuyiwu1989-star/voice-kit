@@ -461,6 +461,8 @@ def test_admin_page_script_loads_in_stub_dom(tmp_path):
     src = (REPO / "voice_kit" / "admin.html").read_text(encoding="utf-8")
     js = re.search(r"<script>(.*?)</script>", src, re.S).group(1)
     stub = (REPO / "tests" / "js" / "dom_stub.mjs").read_text(encoding="utf-8")
+    # 页面依赖共享外壳 window.VK（/admin/static/vk-shell.js），先把它在同一个假 DOM 里跑起来
+    shell = (REPO / "voice_kit" / "static" / "vk-shell.js").read_text(encoding="utf-8")
     extra = """
 globalThis.location = { origin:'http://t', pathname:'/admin/agents', search:'' };
 globalThis.dlgNew = { showModal(){}, close(){} };
@@ -471,7 +473,7 @@ globalThis.fetch = async () => ({ ok:true, status:200, json: async () => ({
   agents:[], root:'/x', bindings:[], conflicts:[], unbound:[] }), text: async () => '' });
 """
     run = tmp_path / "run.mjs"
-    run.write_text(stub + extra + "\n" + js + "\nconsole.log('LOADED_OK'); setTimeout(()=>process.exit(0),80);\n",
+    run.write_text(stub + extra + "\n" + shell + "\n" + js + "\nconsole.log('LOADED_OK'); setTimeout(()=>process.exit(0),80);\n",
                    encoding="utf-8")
     r = subprocess.run(["node", str(run)], capture_output=True, text=True, timeout=30, cwd=str(tmp_path))
     assert r.returncode == 0 and "LOADED_OK" in r.stdout, (r.stdout[-400:], r.stderr[-1200:])

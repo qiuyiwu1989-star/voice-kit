@@ -1,138 +1,61 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent 人设库 · 后台</title>
-<style>
-:root{--bg:#F5F6F8;--paper:#fff;--ink:#1B2028;--ink2:#4B5563;--ink3:#7B8494;--line:#DCE0E6;--line2:#C5CAD3;
-  --acc:#1E6B5A;--accbg:#E4F1EC;--warn:#8A5A00;--warnbg:#FBF1DA;--bad:#9B2C2C;--badbg:#FBE5E5;--mono:#EEF1F4}
-@media (prefers-color-scheme:dark){:root{--bg:#13161B;--paper:#1A1E25;--ink:#E7EAF0;--ink2:#B4BAC6;--ink3:#7F8795;--line:#2A2F38;--line2:#3A414C;
-  --acc:#5FBFA4;--accbg:#16302A;--warn:#E3B45B;--warnbg:#2E2412;--bad:#E38484;--badbg:#331A1A;--mono:#22272F}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif}
-button{font:inherit;cursor:pointer;border:1px solid var(--line2);background:var(--paper);color:var(--ink);padding:6px 12px;border-radius:4px}
-button.p{background:var(--acc);border-color:var(--acc);color:#fff}
-button:disabled{opacity:.5;cursor:default}
-input,select,textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line2);border-radius:4px;padding:6px 8px}
-textarea{width:100%;min-height:320px;font:13px/1.55 "JetBrains Mono",ui-monospace,Menlo,monospace;background:var(--mono);resize:vertical;tab-size:2}
-#app{display:grid;grid-template-columns:280px 1fr;min-height:100dvh}
-@media (max-width:820px){#app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line)}}
-aside{border-right:1px solid var(--line);background:var(--paper);padding:18px 16px}
-nav.top{display:flex;gap:4px;margin:0 0 14px;font-size:13px}
-nav.top a{padding:4px 10px;border-radius:4px;color:var(--ink2);text-decoration:none;border:1px solid transparent}
-nav.top a.on{border-color:var(--line2);background:var(--bg);color:var(--ink);font-weight:600}
-aside h1{font-size:15px;margin:0 0 2px}
-aside .sub{font-size:12px;color:var(--ink3);margin-bottom:14px;word-break:break-all}
-.ag{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid transparent;background:none;border-radius:6px;margin-bottom:4px}
-.ag:hover{background:var(--bg)}
-.ag.on{border-color:var(--line2);background:var(--bg)}
-.ag b{display:block;font-size:14px}
-.ag small{color:var(--ink3);font-size:12px}
-.pill{display:inline-block;font-size:11px;padding:0 7px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);margin-right:4px;white-space:nowrap}
-.pill.acc{background:var(--accbg);color:var(--acc);border-color:transparent}
-.pill.warn{background:var(--warnbg);color:var(--warn);border-color:transparent}
-.pill.bad{background:var(--badbg);color:var(--bad);border-color:transparent}
-main{padding:24px 32px 64px;max-width:1080px}
-.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
-.head h2{margin:0;font-size:22px}
-.head .v{font:13px ui-monospace,Menlo,monospace;color:var(--ink3)}
-.notes{font-size:13px;color:var(--ink3);margin:0 0 16px}
-.card4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 22px}
-@media (max-width:820px){.card4{grid-template-columns:repeat(2,1fr)}}
-.card4>div{background:var(--paper);border:1px solid var(--line);padding:10px 12px}
-.card4 small{display:block;color:var(--ink3);font-size:11px;letter-spacing:.05em}
-.card4 b{font-size:20px;font-variant-numeric:tabular-nums}
-.card4 i{font-style:normal;font-size:12px;color:var(--ink3)}
-.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap}
-.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 12px;color:var(--ink2)}
-.tabs button.on{border-bottom-color:var(--acc);color:var(--ink);font-weight:600}
-.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
-.bar .grow{flex:1}
-#issues{margin:10px 0}
-.iss{padding:6px 10px;border-left:3px solid var(--bad);background:var(--badbg);margin:4px 0;font-size:13px}
-.iss.warn{border-left-color:var(--warn);background:var(--warnbg)}
-.iss.ok{border-left-color:var(--acc);background:var(--accbg)}
-.iss code{font-family:ui-monospace,Menlo,monospace;font-size:12px}
-section.blk{margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
-section.blk h3{margin:0 0 8px;font-size:15px}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--ink3);font-weight:500;font-size:12px}
-.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
-#toast{position:fixed;right:16px;bottom:16px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s}
-#toast.show{opacity:1}
-dialog{border:1px solid var(--line2);border-radius:8px;background:var(--paper);color:var(--ink);padding:20px 22px;min-width:360px}
-dialog label{display:block;font-size:12px;color:var(--ink3);margin-top:10px}
-dialog input,dialog select{width:100%}
-.hint{font-size:12px;color:var(--ink3)}
-.log{border:1px solid var(--line);background:var(--paper);padding:12px 14px;min-height:260px;max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
-.m{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:start;font-size:14px}
-.m b{color:var(--ink3);font-weight:500;font-size:12px;padding-top:3px}
-.m span{white-space:pre-wrap}
-.m.user span{color:var(--ink2)}
-.m i{font-style:normal;font-size:11px;color:var(--ink3);white-space:nowrap}
-/* 「还没做」故意用灰白虚线，不用任何近似绿色的颜色——空位不许长得像通过 */
-.pill.todo{background:transparent;color:var(--ink3);border:1px dashed var(--line2)}
-.card4 b.todo{font-size:15px;color:var(--ink3);font-weight:500}
-ol.gates{list-style:none;margin:0;padding:0}
-ol.gates li.g{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
-ol.gates li.g:last-child{border-bottom:0}
-.gmark{font-size:18px;line-height:1.2;text-align:center}
-.gmark.acc{color:var(--acc)}.gmark.bad{color:var(--bad)}.gmark.warn{color:var(--warn)}.gmark.todo{color:var(--ink3)}
-ol.gates code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--ink3)}
-.recap{border:1px solid var(--line);background:var(--paper);padding:10px 12px;margin:8px 0}
-.recap .rtext{white-space:pre-wrap;margin-top:4px}
-a.dl{font-size:13px;color:var(--acc);text-decoration:none;border:1px solid var(--line2);padding:6px 12px;border-radius:4px}
-#promptView{white-space:pre-wrap;font-size:12px;background:var(--mono);border:1px solid var(--line);padding:12px;max-height:40vh;overflow:auto}
-</style>
+<title>Agent 管理 · voice-kit 后台</title>
+<link rel="stylesheet" href="/admin/static/vk-admin.css?v={{VK_ASSET_V}}">
+<script src="/admin/static/vk-shell.js?v={{VK_ASSET_V}}"></script>
 </head>
-<body>
-<div id="app">
-<aside>
-  <nav class="top"><a href="/admin/agents" class="on">Agent 人设库</a><a href="/admin/memory">用户记忆</a><a href="/admin/feedback">数据回流</a></nav>
-  <h1>Agent 人设库</h1>
-  <div class="sub" id="root">读取中…</div>
-  <div id="list"></div>
-  <div style="margin-top:14px"><button id="btnNew">＋ 新建 agent</button></div>
-  <p class="hint" style="margin-top:18px">真源在 git。这里改完记得提交。<br>铁律不在这里改——它是 rails 档位。</p>
-</aside>
-<main id="main"><p class="hint">选一个 agent。</p></main>
+<body data-vk-module="agents" data-vk-env="{{VK_ENV}}">
+<div class="vk-shell" id="vkShell">
+  <div class="vk-workspace" id="main" data-pane="list">
+    <aside class="vk-list" aria-label="agent 列表">
+      <div class="vk-list-head"><span class="vk-list-title">Agent 人设库</span>
+        <button class="vk-btn vk-btn--sm vk-desk-only" id="btnNew" title="从模板新建一个 agent">新建</button></div>
+      <div class="vk-list-body" id="list"><span class="vk-skel"></span><span class="vk-skel w60"></span><span class="vk-skel"></span><span class="vk-skel w40"></span></div>
+      <div class="vk-list-foot"><p class="hint">真源在 git，这里改完记得提交。铁律不在这里改——它是 rails 档位。</p><p class="hint mono" id="root" style="margin-top:4px;overflow-wrap:anywhere"></p></div>
+    </aside>
+    <main class="vk-detail" id="detailScroll" tabindex="-1">
+      <div class="vk-detail-in" id="detail"><div class="vk-empty">选一个 agent。</div></div>
+    </main>
+  </div>
 </div>
-<div id="toast"></div>
 
-<dialog id="dlgNew">
-  <form method="dialog" id="formNew">
-    <b>新建 agent</b>
-    <label>id（小写字母、数字、连字符）<input name="id" required pattern="[a-z][a-z0-9-]{1,40}"></label>
-    <label>名字<input name="name" required></label>
-    <label>级别<select name="kind"><option value="config">配置级（prompt + 音色 + 档位）</option><option value="code">代码级（有自己的上游和记忆）</option></select></label>
-    <label>闸门档位<select name="rails" id="selRails"></select></label>
-    <label>受众年龄档（逗号分隔）<input name="bands" value="low,mid,high"></label>
-    <label>所属产品<input name="product" placeholder="qiuqiu / coach"></label>
-    <div class="bar" style="margin-top:14px;justify-content:flex-end"><button type="button" onclick="dlgNew.close()">取消</button><button class="p" value="ok">创建</button></div>
+<dialog id="dlgNew" class="vk-dialog" aria-labelledby="dlgNewT">
+  <form method="dialog" id="formNew" class="vk-dlg">
+    <h2 id="dlgNewT">新建 agent</h2>
+    <p class="body">从模板生成六层文件，状态是草案。不会影响线上已有的 agent。</p>
+    <div class="vk-field"><label for="nId">id（小写字母、数字、连字符）</label><input class="vk-input mono" id="nId" name="id" required pattern="[a-z][a-z0-9-]{1,40}" autocomplete="off"></div>
+    <div class="vk-field"><label for="nName">名字</label><input class="vk-input" id="nName" name="name" required></div>
+    <div class="vk-field"><label for="nKind">级别</label><select class="vk-select-native" id="nKind" name="kind"><option value="config">配置级（prompt + 音色 + 档位）</option><option value="code">代码级（有自己的上游和记忆）</option></select></div>
+    <div class="vk-field"><label for="selRails">闸门档位</label><select class="vk-select-native" name="rails" id="selRails"></select></div>
+    <div class="vk-field"><label for="nBands">受众年龄档（逗号分隔）</label><input class="vk-input" id="nBands" name="bands" value="low,mid,high"></div>
+    <div class="vk-field"><label for="nProduct">所属产品</label><input class="vk-input" id="nProduct" name="product" placeholder="qiuqiu / coach"></div>
+    <div class="vk-dlg-foot"><button type="button" class="vk-btn vk-btn--lg" onclick="dlgNew.close()">取消</button><button class="vk-btn vk-btn--primary vk-btn--lg" value="ok">创建草案</button></div>
   </form>
 </dialog>
 
 <script>
+VK.build();
 const API = '/admin/agents/api';
 const LAYERS = ['manifest.yaml','persona.md','method.md','playbook.md','lens.yaml'];
 const LAYER_LABEL = {'manifest.yaml':'0 身份','persona.md':'1 人格','method.md':'2 方法论','playbook.md':'3 策略','lens.yaml':'4 透镜'};
-let DICT = null, LIST = [], CUR = null, TAB = 'manifest.yaml', DIRTY = {};
+const TABS = [['overview','概览'],['files','六层文件'],['test','测试'],['try','试聊'],['history','历史']];
+let DICT = null, LIST = [], CUR = null, TAB = 'overview', LAYER = 'manifest.yaml', DIRTY = {}, QUERY = '';
 // 全库的壳 → agent 对照表。顶层只声明不取值——取值要 fetch，而顶层 await 会把
 // 整个脚本的加载卡住（9-14 那次页面点什么都没反应就是加载期出的事）。
 let LIST_SHELLS = null;
 
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
-async function api(path, opt={}){
-  const r = await fetch(API+path, {headers:{'Content-Type':'application/json'}, ...opt});
-  if(!r.ok){ let d=''; try{d=(await r.json()).detail}catch(e){} throw new Error(d||('HTTP '+r.status)); }
-  return r.json();
-}
-const pill = (t,c='') => `<span class="pill ${c}">${esc(t)}</span>`;
-const statusPill = s => s==='production'?pill('生产中','acc'):s==='draft'?pill('草案','warn'):pill(s||'—');
+const esc = VK.esc, icon = VK.icon;
+const toast = (m, o) => VK.toast(m, o);
+const api = VK.api(API);
+const tag = (t, c='') => `<span class="vk-tag ${c}">${esc(t)}</span>`;
+const badge = (t, c='') => `<span class="vk-badge ${c}">${esc(t)}</span>`;
+const statusBadge = s => s==='production'?badge('生产','vk-badge--pub'):s==='draft'?badge('草案','vk-badge--draft'):badge(s||'—');
+const alertBox = (kind, html) => `<div class="vk-alert vk-alert--${kind}">${icon(kind==='ok'?'check':kind==='info'?'info':'alert')}<div>${html}</div></div>`;
+function setUrlId(id){ try{ const u = new URL(location.href); if(id) u.searchParams.set('id', id); else u.searchParams.delete('id'); history.replaceState(null,'',u.pathname+u.search); }catch(e){} }
 
 async function loadShells(){ try{ LIST_SHELLS = await api('/shells'); }catch(e){ LIST_SHELLS = null; } }
 
@@ -142,24 +65,49 @@ function commitNote(d){
   const c = d && d.commit;
   if(!c) return '';
   if(c.ok) return c.noop ? '（内容没变，没产生提交）' : ' · 已提交 '+(c.hash||'');
-  return ' · ⚠ 没能提交：'+(c.reason||'');
+  return ' · 没能提交：'+(c.reason||'');
 }
 
+// ---------------------------------------------------------------- 列表
 async function loadList(){
   const d = await api('/list'); LIST = d.agents; $('#root').textContent = d.root;
   if(d.shells) LIST_SHELLS = d.shells;
-  $('#list').innerHTML = LIST.map(a => `<button class="ag ${CUR&&CUR.id===a.id?'on':''}" data-id="${esc(a.id)}">
-    <b>${esc(a.name)} <span class="mono" style="color:var(--ink3);font-weight:400">${esc(a.version)}</span></b>
-    <small>${esc(a.archetype||'')} · ${esc(a.kind)} · ${esc(a.read_level)} · ${esc(a.rails)}</small><br>
-    ${statusPill(a.status)} ${a.fails?pill(a.fails+' 处不过','bad'):pill('校验通过','acc')} ${a.warns?pill(a.warns+' 警告','warn'):''}
-    ${a.onboarding?pill('四关 '+a.onboarding.passed+'/'+a.onboarding.total, a.onboarding.passed===a.onboarding.total?'acc':'todo'):''}
-  </button>`).join('');
-  document.querySelectorAll('.ag').forEach(b => b.onclick = () => open(b.dataset.id));
+  VK.setProducts(PRODUCT_OPTS(), {value: VK.product(), fallback: '', persist: false, optional: true});
+  paintList();
+}
+function PRODUCT_OPTS(){
+  const prods = [...new Set(LIST.map(a => a.product).filter(Boolean))].sort();
+  return [{value:'', label:'全部产品'}, ...prods.map(p => ({value:p, label: p==='qiuqiu' ? p+' · 儿童' : p, child: p==='qiuqiu'}))];
+}
+function paintList(){
+  const q = QUERY.toLowerCase(), prod = VK.product();
+  const shown = LIST.filter(a => (!prod || a.product === prod) && (!q || (a.id+' '+a.name).toLowerCase().includes(q)));
+  const groups = [['production','Production · 生产'],['draft','Draft · 草案'],['_other','其它']];
+  const html = groups.map(([k,l]) => {
+    const items = shown.filter(a => k==='_other' ? !['production','draft'].includes(a.status) : a.status===k);
+    if(!items.length) return '';
+    return `<div class="vk-group kicker">${l}</div>` + items.map(a => `<button class="vk-item" data-id="${esc(a.id)}" ${CUR&&CUR.id===a.id?'aria-current="true"':''}>
+      <span class="l1"><span class="nm">${esc(a.name)}</span>${statusBadge(a.status)}</span>
+      <span class="l2"><span class="mono">${esc(a.id)}</span><span class="vk-dot-sep"></span><span class="mono">v${esc(a.version)}</span>
+        ${a.onboarding?`<span class="vk-dot-sep"></span><span>四关 ${a.onboarding.passed}/${a.onboarding.total}</span>`:''}
+        ${a.fails?`<span class="vk-dot-sep"></span><span class="dn">${a.fails} 处不过</span>`:''}</span></button>`).join('');
+  }).join('');
+  $('#list').innerHTML = html || `<div class="vk-empty">${icon('empty')}${LIST.length?'当前筛选下没有 agent。':'还没有 agent。'}</div>`;
+  document.querySelectorAll('#list .vk-item').forEach(b => b.onclick = () => open(b.dataset.id, {focus:true}));
 }
 
-async function open(id){
-  if(Object.keys(DIRTY).length && !confirm('有未保存的修改，放弃？')) return;
-  DIRTY = {}; CUR = await api('/'+id); TAB = 'manifest.yaml'; render(); loadList();
+async function open(id, opt={}){
+  if(CUR && CUR.id !== id && Object.keys(DIRTY).length){
+    const ok = await VK.confirm({title:'放弃未保存的修改？', ok:'放弃修改', danger:true,
+      body:`<ul><li><b>${Object.keys(DIRTY).map(esc).join('、')}</b> 有没保存的改动，切走就丢了。</li><li>磁盘上的文件不会变。</li></ul>`});
+    if(!ok) return;
+  }
+  try{
+    const d = await api('/'+encodeURIComponent(id));
+    if(!CUR || CUR.id !== id){ DIRTY = {}; TAB = opt.tab || 'overview'; LAYER = 'manifest.yaml'; }
+    CUR = d; render(); paintList(); setUrlId(id); VK.crumb(id); VK.showDetail();
+    if(opt.focus) $('#detailScroll').focus({preventScroll:true});
+  }catch(e){ toast('打不开：'+e.message, {kind:'err'}); }
 }
 
 function scorecard(sc){
@@ -168,13 +116,13 @@ function scorecard(sc){
   // 「准」这一栏**永远不显示分数**：判断测试跑器没写，编一个数比空着更坏。
   // 它显示的是两样可核对的东西：声明了几个判断维度、有几场回顾可以人看。
   const accSub = (acc.dims||[]).length
-    ? `声明 ${acc.dims.join(' / ')} · ${acc.n_recaps||0} 场回顾可看 ↓`
-    : `lens.yaml 里 write.judgments 是空的 · ${acc.n_recaps||0} 场回顾可看 ↓`;
-  return `<div class="card4">
-    <div><small>守线</small><b>${g.pass_rate==null?'—':g.pass_rate+'%'}</b><i>${g.n?`${g.n} 条 · ${g.fail} 失败 · ${g.suites.join(' / ')}`:'还没跑过套件'}</i></div>
-    <div><small>准</small><b class="todo">还没做</b><i>判断测试跑器没写 · ${esc(accSub)}</i></div>
-    <div><small>快</small><b>${f(s.p50==null?null:Math.round(s.p50),'ms')}</b><i>P90 ${f(s.p90==null?null:Math.round(s.p90),'ms')} · 目标 2500 / 6000</i></div>
-    <div><small>被用</small><b>${sc.usage?sc.usage.sessions+' 场':'—'}</b><i>${sc.usage?`平均 ${sc.usage.avg_user_turns} 个来回 · 真实首字 P50 ${sc.usage.p50_first_ms??'—'}ms · 最近 ${sc.usage.last_at}`:'还没有真人对话'}</i></div></div>`;
+    ? `声明 ${acc.dims.join(' / ')} · ${acc.n_recaps||0} 场回顾可看`
+    : `lens.yaml 里 write.judgments 是空的 · ${acc.n_recaps||0} 场回顾可看`;
+  return `<div class="vk-grid vk-g-4">
+    <div class="vk-card vk-metric"><div class="kicker">Guard · 守线</div><div class="big">${g.pass_rate==null?'—':g.pass_rate+'<small>%</small>'}</div><div class="sub">${g.n?`${g.n} 条 · ${g.fail} 失败 · ${esc(g.suites.join(' / '))}`:'还没跑过套件'}</div></div>
+    <div class="vk-card vk-metric"><div class="kicker">Judgment · 准</div><div class="big todo">还没做</div><div class="sub">判断测试跑器没写 · ${esc(accSub)}</div></div>
+    <div class="vk-card vk-metric"><div class="kicker">Speed · 快</div><div class="big">${s.p50==null?'—':Math.round(s.p50)+'<small>ms</small>'}</div><div class="sub">P90 ${f(s.p90==null?null:Math.round(s.p90),'ms')} · 目标 2500 / 6000</div></div>
+    <div class="vk-card vk-metric"><div class="kicker">Usage · 被用</div><div class="big">${sc.usage?sc.usage.sessions+'<small>场</small>':'—'}</div><div class="sub">${sc.usage?`平均 ${sc.usage.avg_user_turns} 个来回 · 真实首字 P50 ${sc.usage.p50_first_ms??'—'}ms · 最近 ${esc(sc.usage.last_at)}`:'还没有真人对话'}</div></div></div>`;
 }
 
 // ---------------------------------------------------------------- 入职四关
@@ -189,71 +137,89 @@ const GATE_UI = {
 function gatesHtml(gates){
   if(!gates || !gates.length) return '';
   const done = gates.filter(g=>g.status==='pass').length;
-  return `<section class="blk"><h3>入职四关 <span class="hint" style="font-weight:400">（${done} / ${gates.length} 过）</span></h3>
-    <ol class="gates">${gates.map(g=>{
+  return `<section class="vk-section"><h3>入职四关 <span class="hint">${done} / ${gates.length} 过</span></h3>
+    <div class="vk-gates">${gates.map(g=>{
       const u = GATE_UI[g.status] || GATE_UI.missing;
-      return `<li class="g ${esc(g.status)}"><span class="gmark ${u.cls}">${u.mark}</span>
-        <div><b>${esc(g.name)}</b> ${pill(u.word, u.cls)}${g.suite?`<code class="mono">${esc(g.suite)}</code>`:''}
-        <div class="hint">${esc(g.detail||'')}${g.at?` · 上次 ${esc(g.at)}`:''}</div>
-        ${g.how?`<div class="hint">怎么过：${esc(g.how)}</div>`:''}</div></li>`;
-    }).join('')}</ol>
-    <p class="hint">「还没做」= 这一关的跑器还不存在，不是通过。别把空位当绿灯。</p></section>`;
+      return `<div class="vk-gate ${esc(u.cls)}"><div class="st ${u.cls}"><span aria-hidden="true">${u.mark}</span>${u.word}</div>
+        <div class="nm">${esc(g.name)}</div>${g.suite?`<div class="ev mono">${esc(g.suite)}</div>`:''}
+        <div class="ev">${esc(g.detail||'')}${g.at?` · 上次 ${esc(g.at)}`:''}</div>
+        ${g.how?`<div class="ev">怎么过：${esc(g.how)}</div>`:''}</div>`;
+    }).join('')}</div>
+    <p class="hint" style="margin-top:8px">「还没做」= 这一关的跑器还不存在，不是通过。别把空位当绿灯。</p></section>`;
 }
 
 // ---------------------------------------------------------------- 「准」的证据：维度 + 回顾原文
 function judgmentHtml(acc){
   acc = acc || {};
   const dims = acc.dims || [], rs = acc.recaps || [];
-  return `<section class="blk"><h3>判断证据（「准」这一栏的替代品）</h3>
-    <p class="hint">${esc(acc.why||'')}<br>
+  return `<section class="vk-section"><h3>判断证据 <span class="hint">「准」这一栏的替代品</span></h3>
+    <p class="hint" style="max-width:var(--vk-read-max)">${esc(acc.why||'')}
       下面是能拿出来的两样：它<b>声明</b>按什么维度判断，和它<b>实际</b>判断出了什么。
       对着看——是在用自己的方法论，还是在说放之四海皆准的套话。这需要人看，没有分数。</p>
-    <p>声明的判断维度（lens.yaml · write.judgments）：${dims.length?dims.map(d=>`<code>${esc(d)}</code>`).join(' '):'<span class="hint">空的——它没声明自己产出什么判断。</span>'}</p>
-    ${rs.length?rs.map(r=>`<div class="recap"><div class="hint mono">${esc(r.at||'')} · v${esc(r.version||'')} · ${esc(r.model||'')} · ${r.user_turns} 个来回</div>
-      <div class="rtext">${esc(r.review)}${r.truncated?' …（截断）':''}</div></div>`).join('')
+    <p style="margin:10px 0">声明的判断维度（lens.yaml · write.judgments）：${dims.length?dims.map(d=>`<code>${esc(d)}</code>`).join(' '):'<span class="hint">空的——它没声明自己产出什么判断。</span>'}</p>
+    ${rs.length?rs.map(r=>`<div class="vk-card"><div class="hint mono">${esc(r.at||'')} · v${esc(r.version||'')} · ${esc(r.model||'')} · ${r.user_turns} 个来回</div>
+      <div class="pre" style="margin-top:4px">${esc(r.review)}${r.truncated?' …（截断）':''}</div></div>`).join('')
       :'<p class="hint">还没有回顾。用户端 /talk 的「结束并回顾」跑过之后会落到这里。</p>'}
   </section>`;
 }
 
+// ---------------------------------------------------------------- 详情骨架
 function render(){
   const a = CUR;
-  $('#main').innerHTML = `
-  <div class="head"><h2>${esc(a.name)}</h2><span class="v">v${esc(a.version)} · ${esc(a.id)}</span>
-    ${statusPill(a.status)} ${pill(a.kind==='code'?'代码级':'配置级')} ${pill(a.read_level)} ${pill('rails: '+a.rails)} ${pill('model: '+(a.model||DICT.default_model+'（默认）'))}
-    ${a.ok?pill('第一关通过','acc'):pill('第一关不过','bad')}
-    ${a.kind==='config'?`<a href="/talk/${esc(a.id)}" target="_blank" style="font-size:13px">打开用户端 ↗</a>`:''}
-    <a href="/admin/feedback#${encodeURIComponent(a.id)}" style="font-size:13px">数据回流 →</a></div>
-  <p class="notes">${esc(a.notes||'')}</p>
-  ${scorecard(a.scorecard)}
-  <div class="tabs">${LAYERS.map(l => `<button data-l="${l}" class="${TAB===l?'on':''}">${LAYER_LABEL[l]}${DIRTY[l]?' •':''}${a.missing.includes(l)?' ⚠':''}</button>`).join('')}
-    <button data-l="__rails" class="${TAB==='__rails'?'on':''}">5 铁律（只读）</button>
-    <button data-l="__try" class="${TAB==='__try'?'on':''}" style="margin-left:auto">💬 试聊</button></div>
-  <div id="editor"></div>
-  <div id="issues">${issuesHtml(a.issues)}</div>
-  ${gatesHtml(a.onboarding)}
-  ${shellsHtml(a)}
-  <section class="blk"><h3>跑一套用例</h3>
-    <div class="bar"><select id="suite"><option value="gate_contract">gate_contract · 闸门契约</option><option value="qiuqiu_8rules">qiuqiu_8rules · 8 铁律</option><option value="coach_no_scoring">coach_no_scoring · 不打分</option><option value="listener_describe_only">listener_describe_only · 听众只描述</option></select>
-      <input id="svc" placeholder="服务地址" value="${location.origin}" style="min-width:260px"><input id="key" type="password" placeholder="该 agent 所属租户的钥匙" style="min-width:200px">
-      <button class="p" id="btnTest">跑（打真模型，慢）</button></div>
-    <div id="testOut"></div>
-    ${a.reports.length?`<table><tr><th>时间</th><th>套件</th><th>版本</th><th>结果</th><th>首字 P50 / P90</th></tr>${a.reports.map(r=>`<tr><td class="mono">${esc(r.at)}</td><td>${esc(r.suite)}</td><td class="mono">${esc(r.version)}</td><td>${r.ok?pill('通过','acc'):pill(r.n_fail+' 条失败','bad')}</td><td class="mono">${r.first_token?Math.round(r.first_token.p50)+' / '+Math.round(r.first_token.p90):'—'}</td></tr>`).join('')}</table>`:'<p class="hint">还没有报告。</p>'}
-  </section>
-  <section class="blk"><h3>真人对话（${(a.sessions||[]).length}）</h3>
-    ${(a.sessions||[]).length?`<table><tr><th>时间</th><th>版本 / 模型</th><th>来回</th><th>回顾（节选）</th></tr>${a.sessions.map(s=>`<tr><td class="mono">${esc(s.at)}</td><td class="mono">${esc(s.version)} / ${esc(s.model||'')}</td><td>${s.user_turns}</td><td style="max-width:36em">${esc(s.review)}</td></tr>`).join('')}</table>`:'<p class="hint">还没有。用户端 /talk 结束并回顾之后会落到这里。</p>'}
-  </section>
-  ${judgmentHtml(a.scorecard && a.scorecard.accuracy)}
-  <section class="blk"><h3>历史（git log）</h3>
-    ${gitBanner(a.git)}
-    ${a.history.length?`<table>${a.history.map(h=>`<tr><td class="mono">${esc(h.hash)}</td><td class="mono">${esc(h.date)}</td><td>${esc(h.subject)}</td></tr>`).join('')}</table>`:'<p class="hint">没有提交记录（未提交，或不在 git 仓库里）。</p>'}
-    <div class="bar"><a class="dl" href="${API}/export?agent=${encodeURIComponent(a.id)}">导出这个 agent 的六层文件 ↓</a>
-      <a class="dl" href="${API}/export">导出全部 ↓</a>
-      <span class="hint">只打六层文件，sessions / reports / users 不进包。</span></div>
-  </section>`;
-  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { TAB=b.dataset.l; render(); });
-  renderEditor();
-  bindShells();
-  $('#btnTest').onclick = runTest;
+  const nDirty = Object.keys(DIRTY).length;
+  $('#detail').innerHTML = `
+  <div class="vk-obj-head">
+    <div class="id">
+      <div class="vk-obj-title"><h1>${esc(a.name)}</h1>${statusBadge(a.status)}${a.ok?badge('第一关通过','vk-badge--ok'):badge('第一关不过','vk-badge--err')}</div>
+      <div class="vk-obj-meta"><span class="mono">${esc(a.id)}</span><span class="vk-dot-sep"></span><span class="mono">v${esc(a.version)}</span>
+        ${tag(a.kind==='code'?'代码级':'配置级')}${a.product?tag(a.product):''}${tag(a.read_level)}${tag('rails: '+a.rails,'mono')}${tag('model: '+(a.model||(DICT&&DICT.default_model)+'（默认）'),'mono')}</div>
+    </div>
+    <div class="vk-obj-actions">
+      <button class="vk-btn" id="btnGoTry">${icon('chat')}试聊</button>
+      ${a.kind==='config'?`<a class="vk-btn vk-btn--ghost" href="/talk/${esc(a.id)}" target="_blank" rel="noopener">打开用户端 ${icon('ext')}</a>`:''}
+      <a class="vk-btn vk-btn--ghost" href="/admin/feedback?id=${encodeURIComponent(a.id)}">数据回流</a>
+    </div>
+  </div>
+  ${a.notes?`<p class="vk-notes">${esc(a.notes)}</p>`:''}
+  <div class="vk-tabs" role="tablist" aria-label="agent 分区">${TABS.map(([k,l]) =>
+    `<button class="vk-tab" role="tab" id="tab-${k}" aria-controls="panel" data-tab="${k}" aria-selected="${TAB===k}" tabindex="${TAB===k?0:-1}">${l}${k==='files'&&nDirty?'<span class="dirty" aria-label="有未保存改动"></span>':''}${k==='files'&&a.missing.length?`<span class="n">缺 ${a.missing.length}</span>`:''}</button>`).join('')}</div>
+  <div id="panel" role="tabpanel" aria-labelledby="tab-${TAB}"></div>`;
+  document.querySelectorAll('.vk-tab').forEach(t => t.onclick = () => { if(TAB!==t.dataset.tab){ TAB = t.dataset.tab; paintTabs(); renderPanel(); } });
+  $('#btnGoTry').onclick = () => { TAB = 'try'; paintTabs(); renderPanel(); };
+  renderPanel();
+}
+function paintTabs(){
+  document.querySelectorAll('.vk-tab').forEach(t => { const on = t.dataset.tab===TAB; t.setAttribute('aria-selected', on); t.tabIndex = on?0:-1; });
+  const ft = document.querySelector('.vk-tab[data-tab="files"]');
+  if(ft){ const has = Object.keys(DIRTY).length > 0, dot = ft.querySelector('.dirty');
+    if(has && !dot) ft.insertAdjacentHTML('beforeend', '<span class="dirty" aria-label="有未保存改动"></span>');
+    if(!has && dot) dot.remove(); }
+  $('#panel').setAttribute('aria-labelledby', 'tab-'+TAB);
+}
+function renderPanel(){
+  const p = $('#panel'), a = CUR;
+  if(TAB==='overview'){
+    p.innerHTML = `${scorecard(a.scorecard)}
+      ${gatesHtml(a.onboarding)}
+      <section class="vk-section"><h3>静态审查</h3><div id="issues">${issuesHtml(a.issues)}</div></section>
+      ${shellsHtml(a)}
+      ${judgmentHtml(a.scorecard && a.scorecard.accuracy)}`;
+    bindShells(); return;
+  }
+  if(TAB==='files'){ renderFiles(p); return; }
+  if(TAB==='test'){ renderTest(p); return; }
+  if(TAB==='try'){ renderTry(p); return; }
+  p.innerHTML = `
+    <section><h3 style="margin-bottom:10px">git 历史</h3>
+      ${gitBanner(a.git)}
+      ${a.history.length?`<div class="vk-tw"><table class="vk-table"><thead><tr><th>提交</th><th>时间</th><th>说明</th></tr></thead><tbody>${a.history.map(h=>`<tr><td class="mono nowrap">${esc(h.hash)}</td><td class="mono nowrap">${esc(h.date)}</td><td>${esc(h.subject)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="vk-empty">${icon('empty')}没有提交记录（未提交，或不在 git 仓库里）。</div>`}
+      <div class="vk-row" style="margin-top:12px"><a class="vk-btn" href="${API}/export?agent=${encodeURIComponent(a.id)}">${icon('export')}导出这个 agent 的六层文件</a>
+        <a class="vk-btn vk-btn--ghost" href="${API}/export">导出全部</a>
+        <span class="hint">只打六层文件，sessions / reports / users 不进包。</span></div>
+    </section>
+    <section class="vk-section"><h3>真人对话 <span class="hint">${(a.sessions||[]).length} 场</span></h3>
+      ${(a.sessions||[]).length?`<div class="vk-tw"><table class="vk-table"><thead><tr><th>时间</th><th>版本 / 模型</th><th class="r">来回</th><th>回顾（节选）</th></tr></thead><tbody>${a.sessions.map(s=>`<tr><td class="mono nowrap">${esc(s.at)}</td><td class="mono">${esc(s.version)} / ${esc(s.model||'')}</td><td class="r num">${s.user_turns}</td><td>${esc(s.review)}</td></tr>`).join('')}</tbody></table></div>`:`<div class="vk-empty">${icon('empty')}还没有。用户端 /talk 结束并回顾之后会落到这里。</div>`}
+    </section>`;
 }
 
 // ---------------------------------------------------------------- 壳绑定
@@ -263,27 +229,30 @@ function shellsHtml(a){
   const mine = a.shells || [];
   const all = (LIST_SHELLS && LIST_SHELLS.bindings) || [];
   const others = all.filter(b => !b.agents.includes(a.id));
-  return `<section class="blk"><h3>壳绑定（shells）</h3>
-    <p class="hint">这个 agent 服务宿主产品（AI 教练）的哪些壳。真源是 manifest.yaml 的 <code>shells</code>，
-      REP 靠它把 slug 解析成 agent，自己库里不加列。<b>一个壳只能归一个 agent</b>——撞了保存会被挡下。</p>
-    <div class="bar"><input id="shellsIn" class="grow" placeholder="用逗号或空格分隔，例如 founder-pitch, sarah-chen" value="${esc(mine.join(', '))}">
-      <button class="p" id="btnShells">保存壳绑定</button></div>
-    <p class="hint">不升版本：壳绑定是部署关系，不是人设内容。</p>
-    ${others.length?`<table><tr><th>别人已认领的壳</th><th>归谁</th></tr>${others.map(b=>`<tr><td class="mono">${esc(b.shell)}</td><td>${b.agents.map(x=>esc(x)).join(' + ')} ${b.conflict?pill('撞了','bad'):''}</td></tr>`).join('')}</table>`:'<p class="hint">全库没有别的 agent 认领壳。</p>'}
-  </section>`;
+  return `<section class="vk-section"><div class="vk-card">
+    <div class="vk-card-h"><h3>壳绑定</h3><span class="hint">shells</span></div>
+    <p class="hint" style="max-width:var(--vk-read-max)">这个 agent 服务宿主产品（AI 教练）的哪些壳。真源是 manifest.yaml 的 <code>shells</code>，
+      REP 靠它把 slug 解析成 agent。<b>保存后 AI 教练对应的壳立刻换用这个 agent</b>；一个壳只能归一个 agent，撞了会被挡下。不升版本：壳绑定是部署关系，不是人设内容。</p>
+    <div class="vk-row vk-desk-only" style="margin-top:12px"><label class="vk-sr" for="shellsIn">壳（逗号或空格分隔）</label>
+      <input id="shellsIn" class="vk-input mono grow" placeholder="用逗号或空格分隔，例如 founder-pitch, sarah-chen" value="${esc(mine.join(', '))}">
+      <button class="vk-btn vk-btn--primary" id="btnShells">保存壳绑定</button></div>
+    <p class="vk-mobile-note hint" style="margin-top:8px">当前：${mine.length?mine.map(esc).join('、'):'（无）'}。修改请在电脑上操作。</p>
+    ${others.length?`<div class="vk-tw" style="margin-top:12px"><table class="vk-table"><thead><tr><th>别人已认领的壳</th><th>归谁</th></tr></thead><tbody>${others.map(b=>`<tr><td class="mono">${esc(b.shell)}</td><td>${b.agents.map(x=>esc(x)).join(' + ')} ${b.conflict?badge('撞了','vk-badge--err'):''}</td></tr>`).join('')}</tbody></table></div>`:'<p class="hint" style="margin-top:8px">全库没有别的 agent 认领壳。</p>'}
+  </div></section>`;
 }
 function bindShells(){
   const btn = $('#btnShells'); if(!btn) return;
-  btn.onclick = async () => {
+  btn.onclick = () => VK.busy(btn, async () => {
     const raw = $('#shellsIn').value.split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
-    btn.disabled = true;
-    try{
-      CUR = await api('/'+CUR.id+'/shells', {method:'PUT', body: JSON.stringify({shells: raw})});
-      const note = commitNote(CUR);
-      await loadShells(); render(); loadList(); toast('壳绑定已保存'+note);
-    }catch(e){ toast('保存失败：'+e.message); }
-    finally{ const b=$('#btnShells'); if(b) b.disabled = false; }
-  };
+    const before = (CUR.shells||[]).slice(), id = CUR.id;
+    CUR = await api('/'+id+'/shells', {method:'PUT', body: JSON.stringify({shells: raw})});
+    const note = commitNote(CUR);
+    await loadShells(); render(); paintList();
+    toast('壳绑定已保存'+note, {undo:{label:'撤销', fn: async () => {
+      try{ CUR = await api('/'+id+'/shells', {method:'PUT', body: JSON.stringify({shells: before})}); await loadShells(); render(); paintList(); toast('已撤销壳绑定改动'); }
+      catch(e){ toast('没成：'+e.message, {kind:'err'}); }
+    }}});
+  }, '保存中…');
 }
 
 // ---------------------------------------------------------------- 落盘留痕
@@ -291,56 +260,122 @@ function bindShells(){
 // 所以「历史」在线上永远是空的。这条横幅的作用是：不让人把「空」误读成「没改过」。
 function gitBanner(g){
   if(!g) return '';
-  if(!g.repo) return `<div class="iss warn">${esc(g.reason||'agents/ 不是 git 工作副本')}
+  if(!g.repo) return alertBox('warn', `${esc(g.reason||'agents/ 不是 git 工作副本')}
     改动只活在这台机器的磁盘上：没有历史、没法回滚，下次 rsync 部署会把它盖掉。
-    先用下面的「导出」把改动带回本地提交；根治办法见 TASKS.md「后台落盘留痕」那条。</div>`;
-  if(!g.auto_commit) return `<div class="iss warn">${esc(g.reason||'')}</div>`;
-  return `<div class="iss ok">agents/ 是 git 工作副本，且开了自动提交：后台每次保存会顺手提交一笔。</div>`;
+    先用下面的「导出」把改动带回本地提交；根治办法见 TASKS.md「后台落盘留痕」那条。`);
+  if(!g.auto_commit) return alertBox('warn', esc(g.reason||''));
+  return alertBox('ok', 'agents/ 是 git 工作副本，且开了自动提交：后台每次保存会顺手提交一笔。');
 }
 
 function issuesHtml(iss){
-  if(!iss.length) return `<div class="iss ok">静态审查：没有问题。</div>`;
-  return iss.map(i => `<div class="iss ${i.severity}"><code>${esc(i.where)}</code> ${esc(i.message)}</div>`).join('');
+  if(!iss.length) return alertBox('ok', '静态审查：没有问题。');
+  return iss.map(i => alertBox(i.severity==='fail'?'err':i.severity==='warn'?'warn':'info', `<code>${esc(i.where)}</code> ${esc(i.message)}`)).join('');
 }
 
-function renderEditor(){
-  const ed = $('#editor');
-  if(TAB==='__try'){ renderTry(ed); return; }
-  if(TAB==='__rails'){
+// ---------------------------------------------------------------- 六层文件
+function renderFiles(p){
+  const a = CUR;
+  const sub = [...LAYERS.map(l => [l, LAYER_LABEL[l]]), ['__rails','5 铁律']];
+  p.innerHTML = `<div class="vk-files">
+    <div class="vk-subtabs" role="tablist" aria-orientation="vertical" aria-label="六层文件">${sub.map(([k,l]) =>
+      `<button class="vk-subtab" role="tab" data-l="${k}" aria-selected="${LAYER===k}" tabindex="${LAYER===k?0:-1}">${k==='__rails'?icon('lock'):''}<span>${l}</span>${DIRTY[k]!==undefined?'<span class="dirty" aria-label="未保存"></span>':''}${a.missing.includes(k)?'<span class="miss">缺</span>':''}</button>`).join('')}</div>
+    <div id="editorWrap" style="min-width:0"></div></div><div id="savebarWrap" style="display:contents"></div>`;
+  p.querySelectorAll('.vk-subtab').forEach(b => b.onclick = () => { LAYER = b.dataset.l; renderFiles(p); const nb = p.querySelector(`.vk-subtab[data-l="${LAYER}"]`); if(nb) nb.focus(); });
+  renderEditor($('#editorWrap'));
+}
+function renderEditor(ed){
+  $('#savebarWrap').innerHTML = '';
+  if(LAYER==='__rails'){
     const r = DICT.rails[CUR.rails];
-    ed.innerHTML = `<p>档位 <b>${esc(CUR.rails)}</b>：${esc(r?r.desc:'（不存在）')}</p><p class="hint">铁律由平台闸门执行，agent 只能引用。改档位在 manifest 的 rails 字段，可选：${Object.keys(DICT.rails).map(k=>`<code>${k}</code>`).join(' ')}</p>`;
+    ed.innerHTML = `<div class="vk-alert vk-alert--ro">${icon('lock')}<div><b>只读</b>　铁律由平台闸门执行，agent 只能引用。</div></div>
+      <div class="vk-card"><p>档位 <code>${esc(CUR.rails)}</code>：${esc(r?r.desc:'（不存在）')}</p>
+      <p class="hint" style="margin-top:8px">改档位在 manifest 的 rails 字段，可选：${Object.keys(DICT.rails).map(k=>`<code>${esc(k)}</code>`).join(' ')}</p></div>`;
     return;
   }
-  const text = DIRTY[TAB] ?? CUR.layers[TAB] ?? '';
-  const hint = TAB==='lens.yaml' ? `<p class="hint">字典：facts ${DICT.facts.join(', ')} · signals ${DICT.signals.join(', ')} · recap ${DICT.recap.join(', ')} · judgments 读 own/all/none。<b>write.facts 不允许</b>（事实层 agent 中立）。</p>` : '';
-  ed.innerHTML = `${hint}<textarea id="ta" spellcheck="false">${esc(text)}</textarea>
-  <div class="bar"><button id="btnCheck">校验草稿</button><span class="grow"></span>
-    <label class="hint">版本 <select id="bump"><option value="patch">patch（措辞）</option><option value="minor">minor（策略/透镜）</option><option value="major">major（方法论）</option><option value="none">不升</option></select></label>
-    <button class="p" id="btnSave" ${DIRTY[TAB]===undefined?'disabled':''}>保存这一层</button></div>`;
+  const text = DIRTY[LAYER] ?? CUR.layers[LAYER] ?? '';
+  const dirty = DIRTY[LAYER] !== undefined;
+  const hint = LAYER==='lens.yaml' ? `<p class="hint" style="margin-bottom:8px">字典：facts ${esc(DICT.facts.join(', '))} · signals ${esc(DICT.signals.join(', '))} · recap ${esc(DICT.recap.join(', '))} · judgments 读 own/all/none。<b>write.facts 不允许</b>（事实层 agent 中立）。</p>` : '';
+  ed.innerHTML = `${hint}<div id="draftIssues" aria-live="polite"></div>
+    <div class="vk-editor-head"><span class="mono" style="font-size:12.5px;font-weight:600">${esc(LAYER)}</span><span class="hint">当前 v${esc(CUR.version)}</span>${CUR.missing.includes(LAYER)?badge('文件缺失','vk-badge--warn'):''}
+      <span class="grow"></span><span class="hint vk-desk-only">⌘/Ctrl+S 保存</span></div>
+    <label class="vk-sr" for="ta">${esc(LAYER)} 内容</label>
+    <textarea id="ta" class="vk-textarea vk-editor" spellcheck="false">${esc(text)}</textarea>
+    <p class="vk-mobile-note hint" style="margin-top:8px">编辑请在电脑上操作。</p>`;
+  $('#savebarWrap').innerHTML = `
+    <div class="vk-savebar" id="savebar">
+      <span class="msg ${dirty?'':'clean'}" id="saveMsg"><i aria-hidden="true"></i><span>${dirty?`未保存改动 · <span class="mono">${esc(LAYER)}</span>`:'没有未保存改动'}</span></span>
+      <button class="vk-btn vk-btn--ghost" id="btnDiscard" ${dirty?'':'hidden'}>放弃</button>
+      <button class="vk-btn" id="btnCheck">校验草稿</button>
+      <label class="hint" for="bump">版本</label>
+      <select id="bump" class="vk-select-native"><option value="patch">patch（措辞）</option><option value="minor">minor（策略/透镜）</option><option value="major">major（方法论）</option><option value="none">不升</option></select>
+      <button class="vk-btn vk-btn--primary" id="btnSave" ${dirty?'':'disabled title="没有改动可保存"'}>保存这一层</button>
+    </div>`;
   const ta = $('#ta');
-  ta.oninput = () => { DIRTY[TAB] = ta.value; $('#btnSave').disabled = false; };
-  $('#btnCheck').onclick = async () => {
+  ta.oninput = () => {
+    const was = DIRTY[LAYER] !== undefined;
+    DIRTY[LAYER] = ta.value;
+    if(!was){ paintSaveState(); paintTabs(); const sb = document.querySelector(`.vk-subtab[data-l="${LAYER}"]`); if(sb && !sb.querySelector('.dirty')) sb.querySelector('span').insertAdjacentHTML('afterend','<span class="dirty" aria-label="未保存"></span>'); }
+  };
+  ta.onkeydown = e => {
+    if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); if(DIRTY[LAYER]!==undefined) $('#btnSave').click(); }
+    if(e.key==='Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey){
+      // 编辑器里 Tab 缩进两格；Esc 之后再按 Tab 才离开（避免键盘用户被困住）
+      if(ta.dataset.escaped){ delete ta.dataset.escaped; return; }
+      e.preventDefault(); const s = ta.selectionStart; ta.setRangeText('  ', s, ta.selectionEnd, 'end'); ta.oninput();
+    }
+    if(e.key==='Escape') ta.dataset.escaped = '1';
+  };
+  $('#btnDiscard').onclick = () => { delete DIRTY[LAYER]; renderFiles($('#panel')); paintTabs(); };
+  $('#btnCheck').onclick = () => VK.busy($('#btnCheck'), async () => {
     const d = await api('/'+CUR.id+'/validate', {method:'POST', body: JSON.stringify({layers: DIRTY})});
-    $('#issues').innerHTML = issuesHtml(d.issues); toast(d.ok?'草稿通过第一关':'草稿有问题');
-  };
-  $('#btnSave').onclick = async () => {
-    try{
-      const d = await api('/'+CUR.id+'/layer/'+TAB, {method:'PUT', body: JSON.stringify({text: DIRTY[TAB], bump: $('#bump').value})});
-      delete DIRTY[TAB]; CUR = d; await loadShells(); render(); loadList();
-      toast('已写入 '+TAB+' · v'+d.version+commitNote(d));
-    }catch(e){ toast('保存失败：'+e.message); }
-  };
+    $('#draftIssues').innerHTML = issuesHtml(d.issues); toast(d.ok?'草稿通过第一关':'草稿有问题，看编辑器上方', {kind: d.ok?'ok':'info'});
+  }, '校验中…');
+  $('#btnSave').onclick = () => VK.busy($('#btnSave'), async () => {
+    const d = await api('/'+CUR.id+'/layer/'+LAYER, {method:'PUT', body: JSON.stringify({text: DIRTY[LAYER], bump: $('#bump').value})});
+    const saved = LAYER; delete DIRTY[saved]; CUR = d; await loadShells(); render(); paintList();
+    toast('已写入 '+saved+' · v'+d.version+commitNote(d));
+  }, '保存中…');
+}
+function paintSaveState(){
+  const dirty = DIRTY[LAYER] !== undefined, m = $('#saveMsg'); if(!m) return;
+  m.classList.toggle('clean', !dirty);
+  m.querySelector('span').innerHTML = dirty ? `未保存改动 · <span class="mono">${esc(LAYER)}</span>` : '没有未保存改动';
+  $('#btnDiscard').hidden = !dirty;
+  const s = $('#btnSave'); s.disabled = !dirty; s.title = dirty ? '⌘/Ctrl+S' : '没有改动可保存';
 }
 
+// ---------------------------------------------------------------- 测试
+function renderTest(p){
+  const a = CUR;
+  p.innerHTML = `<div class="vk-card">
+    <div class="vk-card-h"><h3>跑一套用例</h3></div>
+    <p class="hint">每条用例都会打一次真实模型，花钱、要几分钟。报告落在 <code>reports/</code>，下面的表会多一行。</p>
+    <div class="vk-row vk-desk-only" style="margin-top:12px;align-items:flex-end">
+      <div class="vk-field"><label for="suite">套件</label><select id="suite" class="vk-select-native"><option value="gate_contract">gate_contract · 闸门契约</option><option value="qiuqiu_8rules">qiuqiu_8rules · 8 铁律</option><option value="coach_no_scoring">coach_no_scoring · 不打分</option><option value="listener_describe_only">listener_describe_only · 听众只描述</option></select></div>
+      <div class="vk-field grow" style="min-width:200px"><label for="svc">服务地址</label><input id="svc" class="vk-input mono" value="${esc(location.origin)}"></div>
+      <div class="vk-field" style="min-width:180px"><label for="key">该 agent 所属租户的钥匙</label><input id="key" class="vk-input" type="password" autocomplete="off"></div>
+      <button class="vk-btn vk-btn--primary" id="btnTest">${icon('play')}跑测试（调用真实模型，慢）</button>
+    </div>
+    <p class="vk-mobile-note hint" style="margin-top:8px">跑测试请在电脑上操作。</p>
+    <div id="testOut" aria-live="polite"></div>
+  </div>
+  <section class="vk-section"><h3>历史报告 <span class="hint">最近 ${a.reports.length} 份</span></h3>
+    ${a.reports.length?`<div class="vk-tw"><table class="vk-table"><thead><tr><th>时间</th><th>套件</th><th>版本</th><th>结果</th><th class="r">首字 P50 / P90</th></tr></thead><tbody>${a.reports.map(r=>`<tr><td class="mono nowrap">${esc(r.at)}</td><td class="mono">${esc(r.suite)}</td><td class="mono">${esc(r.version)}</td><td>${r.ok?badge('通过','vk-badge--ok'):badge(r.n_fail+' 条失败','vk-badge--err')}</td><td class="mono r nowrap">${r.first_token?Math.round(r.first_token.p50)+' / '+Math.round(r.first_token.p90):'—'}</td></tr>`).join('')}</tbody></table></div>`:`<div class="vk-empty">${icon('empty')}还没有报告。选一个套件跑一次。</div>`}
+  </section>`;
+  $('#btnTest').onclick = runTest;
+}
 async function runTest(){
-  const btn = $('#btnTest'); btn.disabled = true; $('#testOut').innerHTML = '<p class="hint">跑着……每条都要打一次真模型。</p>';
-  try{
-    const d = await api('/'+CUR.id+'/test', {method:'POST', body: JSON.stringify({suite:$('#suite').value, service:$('#svc').value, key:$('#key').value})});
-    $('#testOut').innerHTML = `<div class="iss ${d.ok?'ok':''}">${esc(d.suite)}：${d.ok?'通过':d.n_fail+' 条失败'} · ${d.n} 条 · 首字 P50 ${d.first_token?Math.round(d.first_token.p50):'—'}ms</div>
-      <table><tr><th>用例</th><th>回复</th><th>问题</th></tr>${d.cases.map(c=>`<tr><td class="mono">${esc(c.id)}</td><td>${esc(c.reply)}</td><td>${c.findings.map(esc).join('<br>')||(c.failed?'':'✓')}</td></tr>`).join('')}</table>`;
-    CUR = await api('/'+CUR.id); render(); loadList();
-  }catch(e){ $('#testOut').innerHTML = `<div class="iss">跑失败：${esc(e.message)}</div>`; }
-  finally{ btn.disabled = false; }
+  const btn = $('#btnTest');
+  $('#testOut').innerHTML = alertBox('info', '跑着……每条都要打一次真模型。可以先去看别的标签。');
+  await VK.busy(btn, async () => {
+    try{
+      const d = await api('/'+CUR.id+'/test', {method:'POST', body: JSON.stringify({suite:$('#suite').value, service:$('#svc').value, key:$('#key').value})});
+      const out = `${alertBox(d.ok?'ok':'err', `${esc(d.suite)}：${d.ok?'通过':d.n_fail+' 条失败'} · ${d.n} 条 · 首字 P50 ${d.first_token?Math.round(d.first_token.p50):'—'}ms`)}
+        <div class="vk-tw"><table class="vk-table"><thead><tr><th>用例</th><th>回复</th><th>问题</th></tr></thead><tbody>${d.cases.map(c=>`<tr><td class="mono">${esc(c.id)}</td><td>${esc(c.reply)}</td><td>${c.findings.map(esc).join('<br>')||(c.failed?'':'✓')}</td></tr>`).join('')}</tbody></table></div>`;
+      CUR = await api('/'+CUR.id); render(); paintList();
+      const o = $('#testOut'); if(o) o.innerHTML = out;
+    }catch(e){ const o = $('#testOut'); if(o) o.innerHTML = alertBox('err', `没跑完：${esc(e.message)}`); }
+  }, '跑着…');
 }
 
 // ---------------------------------------------------------------- 试聊：直接用六层文件对话
@@ -348,25 +383,29 @@ const CHAT = {};   // agentId -> messages
 function renderTry(ed){
   const id = CUR.id; CHAT[id] = CHAT[id] || [];
   ed.innerHTML = `<div class="try">
-    <div class="bar"><span class="hint">走 <code>/v1/agents/${esc(id)}/chat/completions</code>：人设从六层文件装配，铁律按 rails 档位注入。改了文件保存后，下一句就生效。</span>
-      <span class="grow"></span><button id="btnPrompt">看装配出的 prompt</button><button id="btnReset">清空对话</button></div>
-    <div id="log" class="log"></div>
-    <form id="chatForm" class="bar"><input id="msg" class="grow" placeholder="以客户的身份说一句……" autocomplete="off"><button class="p" id="btnSend">发送</button></form>
-    <pre id="promptView" hidden></pre></div>`;
+    <div class="vk-row" style="margin-bottom:10px"><span class="hint grow">走 <code>/v1/agents/${esc(id)}/chat/completions</code>：人设从六层文件装配，铁律按 rails 档位注入。改了文件保存后，下一句就生效。</span>
+      <button class="vk-btn vk-btn--ghost" id="btnPrompt" aria-expanded="false">看装配出的 prompt</button><button class="vk-btn vk-btn--ghost" id="btnReset">清空对话</button></div>
+    <div id="log" class="vk-card" style="min-height:260px;max-height:52vh;overflow-y:auto" aria-live="polite"></div>
+    <form id="chatForm" class="vk-row" style="margin-top:10px;flex-wrap:nowrap"><label class="vk-sr" for="msg">说一句</label><input id="msg" class="vk-input grow" placeholder="以客户的身份说一句……" autocomplete="off"><button class="vk-btn vk-btn--primary" id="btnSend">发送</button></form>
+    <pre id="promptView" class="vk-card pre" style="font-size:12px;max-height:40vh;overflow:auto;margin-top:12px" hidden></pre></div>`;
   paintLog();
   $('#chatForm').onsubmit = (e) => { e.preventDefault(); send(); };
   $('#btnReset').onclick = () => { CHAT[id] = []; paintLog(); };
   $('#btnPrompt').onclick = async () => {
-    const pv = $('#promptView');
-    if(!pv.hidden){ pv.hidden = true; return; }
-    const r = await fetch('/v1/agents/'+id+'/prompt'); const d = await r.json();
-    pv.textContent = (d.system_prompt||'') + '\n\n--- 输出闸门：' + (d.output_rules||[]).join('、') + '\n--- 输入接管：' + (d.input_rules||[]).join('、'); pv.hidden = false;
+    const pv = $('#promptView'), b = $('#btnPrompt');
+    if(!pv.hidden){ pv.hidden = true; b.setAttribute('aria-expanded','false'); return; }
+    try{
+      const r = await fetch('/v1/agents/'+id+'/prompt'); const d = await r.json();
+      pv.textContent = (d.system_prompt||'') + '\n\n--- 输出闸门：' + (d.output_rules||[]).join('、') + '\n--- 输入接管：' + (d.input_rules||[]).join('、'); pv.hidden = false; b.setAttribute('aria-expanded','true');
+    }catch(e){ toast('读不出来：'+e.message, {kind:'err'}); }
   };
-  $('#msg').focus();
+  if(!VK.isMobile()) $('#msg').focus();
 }
 function paintLog(){
   const log = $('#log'); if(!log) return;
-  log.innerHTML = (CHAT[CUR.id]||[]).map(m => `<div class="m ${m.role}"><b>${m.role==='user'?'客户':esc(CUR.name)}</b><span>${esc(m.content)}${m.pending?' ▌':''}</span>${m.ms?`<i>${m.ms}ms 首字</i>`:''}</div>`).join('') || '<p class="hint">还没开始。你是客户，先说一句。</p>';
+  const msgs = CHAT[CUR.id]||[];
+  log.innerHTML = msgs.length ? `<div class="vk-conv">${msgs.map(m => `<div class="vk-say ${m.role==='user'?'':'agent'}"><span class="who">${m.role==='user'?'客户':esc(CUR.name)}</span><div class="bub">${esc(m.content)}${m.pending?' ▌':''}${m.ms?`<span class="t">${m.ms}ms 首字</span>`:''}</div></div>`).join('')}</div>`
+    : '<p class="hint">还没开始。你是客户，先说一句。</p>';
   log.scrollTop = log.scrollHeight;
 }
 async function send(){
@@ -378,7 +417,7 @@ async function send(){
   try{
     const r = await fetch('/v1/agents/'+id+'/chat/completions', {method:'POST', headers:{'Content-Type':'application/json','X-Session-ID':'try-'+id},
       body: JSON.stringify({stream:true, messages: CHAT[id].filter(m=>!m.pending).map(m=>({role:m.role, content:m.content}))})});
-    if(!r.ok){ let d=''; try{ d=(await r.json()).detail }catch(e){ d='HTTP '+r.status } bot.content = '⚠ '+d; bot.pending=false; paintLog(); return; }
+    if(!r.ok){ let d=''; try{ d=(await r.json()).detail }catch(e){ d='HTTP '+r.status } bot.content = '（没回上来：'+d+'）'; bot.pending=false; paintLog(); return; }
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
     while(true){
       const {value, done} = await reader.read(); if(done) break;
@@ -390,19 +429,35 @@ async function send(){
         paintLog();
       }
     }
-  }catch(e){ bot.content += ' ⚠ '+e.message; }
-  finally{ bot.pending = false; paintLog(); $('#btnSend').disabled = false; $('#msg').focus(); }
+  }catch(e){ bot.content += '（中断：'+e.message+'）'; }
+  finally{ bot.pending = false; paintLog(); const b = $('#btnSend'); if(b) b.disabled = false; const m = $('#msg'); if(m) m.focus(); }
 }
 
-$('#btnNew').onclick = () => { $('#selRails').innerHTML = Object.entries(DICT.rails).map(([k,v])=>`<option value="${k}">${k} · ${esc(v.desc)}</option>`).join(''); dlgNew.showModal(); };
+// ---------------------------------------------------------------- 新建
+$('#btnNew').onclick = () => { $('#selRails').innerHTML = Object.entries(DICT.rails).map(([k,v])=>`<option value="${esc(k)}">${esc(k)} · ${esc(v.desc)}</option>`).join(''); dlgNew.showModal(); };
 $('#formNew').onsubmit = async (e) => {
   if(e.submitter && e.submitter.value!=='ok') return;
   const f = new FormData(e.target); const b = Object.fromEntries(f.entries()); b.bands = b.bands.split(',').map(s=>s.trim()).filter(Boolean);
-  try{ CUR = await api('/new', {method:'POST', body: JSON.stringify(b)}); DIRTY={}; TAB='manifest.yaml'; render(); loadList(); toast('已创建 '+b.id); }
-  catch(err){ toast('创建失败：'+err.message); e.preventDefault(); }
+  e.preventDefault();
+  try{ const d = await api('/new', {method:'POST', body: JSON.stringify(b)}); dlgNew.close(); DIRTY={}; CUR = d; TAB='files'; LAYER='manifest.yaml'; render(); await loadList(); setUrlId(d.id); VK.crumb(d.id); VK.showDetail(); toast('已创建 '+b.id); }
+  catch(err){ toast('创建失败：'+err.message, {kind:'err'}); }
 };
 
-(async () => { DICT = await api('/dict'); await loadShells(); await loadList(); })().catch(e => { $('#main').innerHTML = `<div class="iss">${esc(e.message)}</div>`; });
+VK.onSearch('搜 agent id、名字', q => { QUERY = q; paintList(); });
+VK.onProduct(() => paintList());
+if(window.addEventListener) window.addEventListener('beforeunload', e => { if(Object.keys(DIRTY).length){ e.preventDefault(); e.returnValue = ''; } });
+
+(async () => {
+  DICT = await api('/dict'); await loadShells(); await loadList();
+  let want = null;
+  try{ want = new URLSearchParams(location.search).get('id') || decodeURIComponent((location.hash||'').slice(1)); }catch(e){}
+  const hit = want && LIST.find(a => a.id === want);
+  if(hit){
+    // 从别的页带 id 跳过来时，它不在当前产品筛选里就先放开筛选，免得详情和列表对不上
+    if(VK.product() && hit.product !== VK.product()){ VK.setProducts(PRODUCT_OPTS(), {value:'', persist:false, optional:true}); paintList(); }
+    open(want);
+  }
+})().catch(e => { $('#detail').innerHTML = alertBox('err', '没加载出来：'+esc(e.message)); });
 </script>
 </body>
 </html>

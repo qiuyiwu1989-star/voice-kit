@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -42,7 +42,9 @@
   --vk-sidebar-w:208px; --vk-rail-w:60px; --vk-topbar-h:52px; --vk-list-w:296px; --vk-read-max:760px; --vk-content-max:1200px;
   color-scheme:light;
 }
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+/* 默认暗色：<html data-theme="dark">；不再跟随系统，所以这里原来的 prefers-color-scheme 块去掉了。
+   保留一份同值的块只为不带 data-theme 打开时也是暗色。 */
+:root:not([data-theme="light"]){
   --vk-accent:#7B80FF; --vk-accent-hover:#9A9EFF; --vk-accent-solid:#5B5FE0; --vk-accent-solid-hover:#4F53D0;
   --vk-accent-bg:rgba(123,128,255,.13); --vk-accent-ink:#9A9EFF;
   --vk-bg:#07070F; --vk-bg-sunken:#0B0B14; --vk-surface:#12131C; --vk-surface-2:#181925;
@@ -61,7 +63,7 @@
   --vk-shadow-1:0 1px 2px rgba(0,0,0,.45),0 5px 14px -4px rgba(0,0,0,.5);
   --vk-shadow-2:0 2px 6px rgba(0,0,0,.4),0 14px 34px -8px rgba(0,0,0,.55),0 34px 68px -24px rgba(0,0,0,.5);
   color-scheme:dark;
-}}
+}
 :root[data-theme="dark"]{
   --vk-accent:#7B80FF; --vk-accent-hover:#9A9EFF; --vk-accent-solid:#5B5FE0; --vk-accent-solid-hover:#4F53D0;
   --vk-accent-bg:rgba(123,128,255,.13); --vk-accent-ink:#9A9EFF;
@@ -514,7 +516,7 @@ dialog::backdrop{background:rgba(7,7,15,.48)}
     <label class="search"><svg class="ico"><use href="#i-search"/></svg><span class="sr">搜索</span><input id="q" placeholder="搜 agent、uid、提案…"><kbd>/</kbd></label>
     <span class="env" title="线上环境：这里的发布、删除都是真的"><i></i>线上<span class="host">voice.qiuyiwu.com</span></span>
     <span class="ticket" title="门票 cookie 6 天后过期"><svg class="ico" style="width:14px;height:14px"><use href="#i-lock"/></svg><i></i><span>门票有效</span></span>
-    <button class="iconbtn" id="themeBtn" title="主题：跟随系统" aria-label="切换主题"><svg class="ico"><use href="#i-theme"/></svg></button>
+    <button class="iconbtn" id="themeBtn" title="主题：暗色" aria-label="切换主题"><svg class="ico"><use href="#i-theme"/></svg></button>
   </header>
 
   <div class="workspace" id="main">
@@ -935,17 +937,16 @@ dialog::backdrop{background:rgba(7,7,15,.48)}
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
   const icon = id => `<svg class="ico"><use href="#${id}"/></svg>`;
 
-  /* ---------- 主题：跟随系统 → 浅 → 暗 ---------- */
-  const order = ['system','light','dark'], label = {system:'跟随系统', light:'浅色', dark:'暗色'};
-  let theme = 'system';
-  try { theme = localStorage.getItem('vk-theme') || 'system'; } catch(e) {}
+  /* ---------- 主题：默认暗色（2026-09-16 拍板，与造物云设计系统页一致），浅 ↔ 暗 两态，手动选过就记住，不跟随系统 ---------- */
+  const label = {light:'浅色', dark:'暗色'};
+  let theme = 'dark';
+  try { theme = localStorage.getItem('vk-theme') === 'light' ? 'light' : 'dark'; } catch(e) {}
   function applyTheme(){
-    if (theme === 'system') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
     $('#themeBtn').title = '主题：' + label[theme];
   }
   applyTheme();
-  $('#themeBtn').onclick = () => { theme = order[(order.indexOf(theme)+1)%3]; try{localStorage.setItem('vk-theme', theme);}catch(e){} applyTheme(); toast('主题：' + label[theme]); };
+  $('#themeBtn').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; try{localStorage.setItem('vk-theme', theme);}catch(e){} applyTheme(); toast('主题：' + label[theme]); };
 
   /* ---------- toast ---------- */
   function toast(msg, undo){

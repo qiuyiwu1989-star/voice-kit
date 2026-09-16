@@ -1,5 +1,6 @@
 """数据回流 → 策略迭代 → 版本升级（feedback.py / feedback_admin.py，2026-09-16）。"""
 import json
+import re
 import shutil
 import sys
 from datetime import date, datetime, timedelta
@@ -571,11 +572,16 @@ def test_feedback_admin_child_agent_403(app, root):
 
 
 def test_admin_pages_link_to_each_other():
+    # 2026-09-17 起导航只由共享外壳 vk-shell.js 渲染（统一后台设计规范 §4.1），三页各自不再写一份
+    shell = (REPO / "voice_kit" / "static" / "vk-shell.js").read_text(encoding="utf-8")
+    for href in ("/admin/agents", "/admin/memory", "/admin/feedback"):
+        assert f"href:'{href}'" in shell, href
     for f in ("admin.html", "memory.html", "feedback.html"):
         html = (REPO / "voice_kit" / f).read_text(encoding="utf-8")
-        for href in ("/admin/agents", "/admin/memory", "/admin/feedback"):
-            assert f'href="{href}"' in html, (f, href)
-        assert "cdn" not in html.lower() and "<script src=" not in html
+        assert "/admin/static/vk-shell.js" in html, f
+        assert "cdn" not in html.lower()
+        # 唯一允许的外链脚本是同源的共享外壳
+        assert re.findall(r'<script src="([^"]+)"', html) == ["/admin/static/vk-shell.js?v={{VK_ASSET_V}}"], f
 
 
 # ---------------------------------------------------------------- 边界
