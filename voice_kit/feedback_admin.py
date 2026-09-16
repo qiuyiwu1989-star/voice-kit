@@ -31,7 +31,7 @@ from fastapi.responses import HTMLResponse
 
 from . import agents as A
 from . import feedback as FB
-from .admin import COOKIE, _authed, _guard, _root, _token
+from .admin import _guard, _root, render_page
 
 _HTML = Path(__file__).parent / "feedback.html"
 
@@ -89,14 +89,7 @@ def build_router(llm_factory: Optional[Callable[[], object]] = None) -> APIRoute
     @r.get("/admin/feedback", response_class=HTMLResponse)
     @r.get("/admin/feedback/", response_class=HTMLResponse)
     def page(request: Request):
-        if not _token():
-            raise HTTPException(404)
-        if not _authed(request):
-            return HTMLResponse("<meta charset=utf-8><p>需要门票：在地址后面加 <code>?k=&lt;VOICEKIT_ADMIN_TOKEN&gt;</code></p>", 401)
-        resp = HTMLResponse(_HTML.read_text(encoding="utf-8"))
-        if request.query_params.get("k"):
-            resp.set_cookie(COOKIE, request.query_params["k"], httponly=True, samesite="lax", max_age=7 * 86400)
-        return resp
+        return render_page(_HTML, request)
 
     api = "/admin/feedback/api"
 

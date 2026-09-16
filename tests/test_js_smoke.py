@@ -16,7 +16,8 @@ PLACEHOLDERS = {"__MODE__": "voice", "__AGENT__": "qiuqiu", "__SHORT__": "球球
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="没有 node")
-@pytest.mark.parametrize("page,kind", [("talk.html", "module"), ("me.html", "classic"), ("memory.html", "classic")])
+@pytest.mark.parametrize("page,kind", [("talk.html", "module"), ("me.html", "classic"), ("memory.html", "classic"),
+                                       ("feedback.html", "classic")])
 def test_page_script_loads_in_stub_dom(tmp_path, page, kind):
     src = (REPO / "voice_kit" / page).read_text(encoding="utf-8")
     for k, v in PLACEHOLDERS.items():
@@ -28,6 +29,8 @@ def test_page_script_loads_in_stub_dom(tmp_path, page, kind):
     (tmp_path / "recorder_stub.mjs").write_text("export function createRecorder(){ return {start(){},pause(){},resume(){},stop(){}}; } export function recorderSupported(){ return false; }")
     (tmp_path / "sq_stub.mjs").write_text("export function createSpeechQueue(){ return {push(){},end(){},stop(){}}; } export function pcm16PostFetcher(){ return () => {}; } export function speechSupported(){ return false; }")
     run = tmp_path / "run.mjs"
-    run.write_text(STUB.read_text(encoding="utf-8") + "\n" + js + "\nconsole.log('LOADED_OK'); setTimeout(() => process.exit(0), 50);\n", encoding="utf-8")
+    # 后台页依赖共享外壳 window.VK：先在同一个假 DOM 里把 vk-shell.js 跑一遍
+    shell = (REPO / "voice_kit" / "static" / "vk-shell.js").read_text(encoding="utf-8") if 'vk-shell.js' in src else ""
+    run.write_text(STUB.read_text(encoding="utf-8") + "\n" + shell + "\n" + js + "\nconsole.log('LOADED_OK'); setTimeout(() => process.exit(0), 50);\n", encoding="utf-8")
     r = subprocess.run(["node", str(run)], capture_output=True, text=True, timeout=30, cwd=str(tmp_path))
     assert r.returncode == 0 and "LOADED_OK" in r.stdout, (r.stdout[-400:], r.stderr[-1200:])

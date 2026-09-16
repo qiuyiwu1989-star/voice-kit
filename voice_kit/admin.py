@@ -14,10 +14,17 @@ fetch 不用带。没配 token 时整个后台 404——不存在"默认开放"�
     GET  /dict                       平台字典（透镜能填什么、rails 有哪些）
     GET  /shells                     全库壳 → agent 的对照表 + 冲突
     GET  /export[?agent=id]          导出六层文件 tar.gz（服务器上没 git 时靠它带回本地）
+
+三页共用的外壳资源（统一后台设计规范 §3.11）：
+    GET  /admin/static/{name}        只放行 vk-admin.css / vk-shell.js，同一张门票
+页面 HTML 里的 `{{VK_ASSET_V}}`（资源内容哈希，防缓存）和 `{{VK_ENV}}`（顶栏环境标识，
+`VOICEKIT_ENV`，默认「线上」）由 `render_page` 在返回时替换。
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
+import html as _html
 import os
 from dataclasses import asdict
 from pathlib import Path
@@ -30,6 +37,10 @@ from . import agents as A
 
 COOKIE = "vk_admin"
 _HTML = Path(__file__).parent / "admin.html"
+_STATIC = Path(__file__).parent / "static"
+# 白名单：只有这两份走 /admin/static。别的静态文件（recorder.js 之类）不从后台路径出去。
+ADMIN_ASSETS = {"vk-admin.css": "text/css; charset=utf-8",
+                "vk-shell.js": "application/javascript; charset=utf-8"}
 
 
 def _root() -> Path:
@@ -54,6 +65,50 @@ def _guard(request: Request):
         raise HTTPException(404)
     if not _authed(request):
         raise HTTPException(401, "需要后台门票")
+
+
+def asset_version() -> str:
+    """两份共享资源的内容哈希。部署后内容一变，页面引用的 ?v= 就变，浏览器不会吃旧缓存。
+    用内容而不是 git hash：服务器上的代码目录不一定是 git 工作副本。"""
+    h = hashlib.sha1()
+    for name in sorted(ADMIN_ASSETS):
+        p = _STATIC / name
+        h.update(p.read_bytes() if p.exists() else b"")
+    return h.hexdigest()[:10]
+
+
+def env_label() -> str:
+    """顶栏环境标识。没配就是「线上」——宁可在本地多看见一个红点，也不要线上忘了标。"""
+    return os.environ.get("VOICEKIT_ENV", "").strip() or "线上"
+
+
+def render_page(html_path: Path, request: Request) -> HTMLResponse:
+    """三个后台页共用：门票校验 → 替换占位符 → 首次带 ?k= 时种 cookie。"""
+    if not _token():
+        raise HTTPException(404)
+    if not _authed(request):
+        return HTMLResponse("<meta charset=utf-8><p>需要门票：在地址后面加 <code>?k=&lt;VOICEKIT_ADMIN_TOKEN&gt;</code></p>", 401)
+    text = (html_path.read_text(encoding="utf-8")
+            .replace("{{VK_ASSET_V}}", asset_version())
+            .replace("{{VK_ENV}}", _html.escape(env_label(), quote=True)))
+    resp = HTMLResponse(text)
+    if request.query_params.get("k"):
+        resp.set_cookie(COOKIE, request.query_params["k"], httponly=True, samesite="lax", max_age=7 * 86400)
+    return resp
+
+
+def build_static_router() -> APIRouter:
+    r = APIRouter()
+
+    @r.get("/admin/static/{name}", include_in_schema=False)
+    def static(name: str, request: Request):
+        _guard(request)                      # 和页面、接口同一张门票
+        if name not in ADMIN_ASSETS or not (_STATIC / name).is_file():
+            raise HTTPException(404)
+        return Response((_STATIC / name).read_bytes(), media_type=ADMIN_ASSETS[name],
+                        headers={"Cache-Control": "private, max-age=300"})
+
+    return r
 
 
 def _agent_or_404(agent_id: str) -> A.Agent:
@@ -110,14 +165,7 @@ def build_router() -> APIRouter:
     @r.get("", response_class=HTMLResponse)
     @r.get("/", response_class=HTMLResponse)
     def page(request: Request):
-        if not _token():
-            raise HTTPException(404)
-        if not _authed(request):
-            return HTMLResponse("<meta charset=utf-8><p>需要门票：在地址后面加 <code>?k=&lt;VOICEKIT_ADMIN_TOKEN&gt;</code></p>", 401)
-        resp = HTMLResponse(_HTML.read_text(encoding="utf-8"))
-        if request.query_params.get("k"):
-            resp.set_cookie(COOKIE, request.query_params["k"], httponly=True, samesite="lax", max_age=7 * 86400)
-        return resp
+        return render_page(_HTML, request)
 
     @r.get("/api/dict")
     def dict_(request: Request):

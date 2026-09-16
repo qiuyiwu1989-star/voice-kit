@@ -851,8 +851,10 @@ li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;col
 
     # ------------------------------------------------------------ Agent 后台
     # 只在配了 VOICEKIT_ADMIN_TOKEN 时存在；没配就 404。真源是 agents/ 目录的文件。
-    from .admin import build_router
+    from .admin import build_router, build_static_router
     app.include_router(build_router())
+    # 三个后台页共用的外壳 CSS/JS：/admin/static/*，同一张后台门票
+    app.include_router(build_static_router())
     # 用户记忆后台 /admin/memory：同一张后台门票，和 Agent 管理并列
     from .memory_admin import build_router as build_memory_router
     app.include_router(build_memory_router(known_products=lambda: [t.memory_product for t in registry.all()]))
