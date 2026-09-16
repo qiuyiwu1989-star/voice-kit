@@ -832,9 +832,9 @@ li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;col
         # manifest 的 voice 可以写角色名（"coach"）也可以写编号（603003）。
         # **回给调用方的必须是解析后的编号** —— 角色名传给前端，选择器匹配不上任何一项，
         # 于是显示第一个、实际合成又用另一个（2026-09-16：RED 的嗓子显示成儿童音色）。
-        raw = ag.manifest.get("voice")
-        default = V.resolve(str(raw) if raw is not None else "assistant", override=raw)
-        return {"default": default, "options": V.options_for(lang, default=default if lang != "en" else None)}
+        # 英文场给英文音色（manifest.voice_en，或按性别配）——中文音色念英文是中文口音，见 voices.default_for_agent
+        default = V.default_for_agent(ag.manifest, lang)
+        return {"default": default, "options": V.options_for(lang, default=default)}
 
     @app.get("/v1/agents/{agent_id}/prompt")
     def agent_prompt(agent_id: str, request: Request, authorization: str = Header(None)):

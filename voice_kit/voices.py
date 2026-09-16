@@ -185,3 +185,28 @@ def options_for(lang: str = "zh", default=None):
             out.append({"id": v.id, "name": v.name, "gender": v.gender, "tier": v.tier,
                         "scene": v.scene, "lang": "en" if v in EN_VOICES else "zh"})
     return out
+
+
+def default_for_agent(manifest: dict, lang: str = "zh") -> int:
+    """agent 在某个语言下的默认音色。
+
+    英文为什么不能沿用中文音色：2026-09-16 在服务器上实测，腾讯流式合成**完全忽略 PrimaryLanguage**——
+    同一个音色、同一段英文，传 1 / 2 / 不传，音频逐字节相同。中文播音员念英文就是中文口音，
+    靠参数救不回来，只能换一个英文音色。
+
+    顺序：manifest.voice_en（显式指定）> 按中文音色的性别配一个英文音色 > WeJack。
+    """
+    raw = manifest.get("voice")
+    zh = resolve(str(raw) if raw is not None else "assistant", override=raw)
+    if (lang or "zh") != "en":
+        return zh
+    en = manifest.get("voice_en")
+    if en is not None:
+        try:
+            if int(en) in BY_ID:
+                return int(en)
+        except (TypeError, ValueError):
+            pass
+    g = BY_ID[zh].gender if zh in BY_ID else "男"
+    return 101051 if g.startswith("女") else 101050
+

@@ -19,6 +19,7 @@ model: deepseek-v4-flash
 # 一轮最多说几句、几个字，由平台在句子边界截断（不靠提示词）。对方明确要意见时放宽到 feedback_*。
 turn_limit: {sentences: 2, chars: 60, feedback_sentences: 4, feedback_chars: 160}
 voice: 501003   # 用户 2026-09 选定的男声
+voice_en: 101050   # 英文场的嗓子：腾讯流式合成忽略语言参数，中文音色念英文是中文口音（2026-09-16 实测）
 layers: [persona.md, method.md, playbook.md]
 updated_at: 2026-09-16
 notes: >-

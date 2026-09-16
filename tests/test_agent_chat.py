@@ -498,3 +498,27 @@ def test_host_exit_page_in_english(app, root, monkeypatch):
     assert "SESSION =" not in page and "Practice there" in page and "jiaolian.qiuyiwu.com/s/founder-pitch" in page
     assert "去那边练" not in page
     assert "去那边练" in c.get(f"/talk/{hid}").text
+
+
+def test_english_voice_default_is_an_english_voice(app, root, monkeypatch):
+    """英文场默认给英文音色：腾讯流式合成忽略 PrimaryLanguage，中文音色念英文是中文口音（2026-09-16 实测）。
+    AI 教练原来拿到 lang=en 的 default 用不上，只好退回中文音色。"""
+    from voice_kit import voices as V
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    c = TestClient(app, cookies={"vk_ui": "go"})
+    for aid, zh, en in (("boss-decide", 501008, 101050), ("kefu-xiaoan", 603004, 101051), ("red-coach", 501003, 101050)):
+        z = c.get(f"/v1/agents/{aid}/voices?lang=zh").json()
+        e = c.get(f"/v1/agents/{aid}/voices?lang=en").json()
+        assert z["default"] == zh, aid
+        assert e["default"] == en and e["options"][0]["id"] == en, aid
+    # 没写 voice_en：按中文音色的性别配
+    assert V.default_for_agent({"voice": 603004}, "en") == 101051
+    assert V.default_for_agent({"voice": 501008}, "en") == 101050
+    # voice_en 写了表里没有的：退回按性别配，不报错
+    assert V.default_for_agent({"voice": 603004, "voice_en": 999}, "en") == 101051
+
+
+def test_boss_agents_are_sparring_partners():
+    ags = {a.id: a for a in A.load_all(REPO / "agents")}
+    assert ags["boss-decide"].manifest["archetype"] == "陪练对手"
+    assert ags["boss-risk"].manifest["archetype"] == "陪练对手"

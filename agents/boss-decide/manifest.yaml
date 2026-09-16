@@ -2,10 +2,10 @@ id: boss-decide
 name: 结论先行 · 只给三分钟的老板
 name_en: Bottom Line · The Three-Minute Boss
 short_name: 老板
-version: 1.0.0
+version: 1.0.1
 kind: config
 status: production
-archetype: 教练
+archetype: 陪练对手  # 扮演学员要说服的老板，不是教练（2026-09-17 改）
 blurb: 跟老板提方案：让他三分钟内能拍板
 blurb_en: "Pitch it to your boss: get a decision in three minutes."
 audience:
@@ -20,6 +20,7 @@ model: deepseek-v4-flash
 # 老板说话更短：平时一句为主，最多两句 50 字；要意见时放宽
 turn_limit: {sentences: 2, chars: 50, feedback_sentences: 4, feedback_chars: 160}
 voice: 501008   # 沿用 AI 教练 seed-agent-boss.ts 的选择：大模型男声，压场
+voice_en: 101050   # 英文场的嗓子：腾讯流式合成忽略语言参数，中文音色念英文是中文口音（2026-09-16 实测）
 layers: [persona.md, method.md, playbook.md]
 updated_at: 2026-09-16
 notes: >-

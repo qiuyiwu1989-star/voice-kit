@@ -356,6 +356,15 @@ def validate(ag: Agent, *, author_level: str = "L0",
         from . import voices as _V
         if int(v) not in _V.BY_ID:
             out.append(Issue("manifest.yaml", f"voice {v} 不在音色表里，合成时会被换成默认嗓子；先在 voices.py 登记", "warn"))
+    ve = m.get("voice_en")
+    if ve is not None:
+        from . import voices as _V
+        try:
+            ok = int(ve) in _V.BY_ID
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            out.append(Issue("manifest.yaml", f"voice_en {ve!r} 不是音色表里的编号，英文场会退回按性别配的英文音色", "warn"))
     if m.get("read_level") not in READ_LEVELS:
         out.append(Issue("manifest.yaml", f"read_level 只能是 {READ_LEVELS}"))
     elif READ_LEVELS.index(m["read_level"]) < READ_LEVELS.index(author_level):
