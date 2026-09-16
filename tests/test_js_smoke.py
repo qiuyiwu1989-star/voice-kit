@@ -16,7 +16,7 @@ PLACEHOLDERS = {"__MODE__": "voice", "__AGENT__": "qiuqiu", "__SHORT__": "球球
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="没有 node")
-@pytest.mark.parametrize("page,kind", [("talk.html", "module"), ("me.html", "classic")])
+@pytest.mark.parametrize("page,kind", [("talk.html", "module"), ("me.html", "classic"), ("memory.html", "classic")])
 def test_page_script_loads_in_stub_dom(tmp_path, page, kind):
     src = (REPO / "voice_kit" / page).read_text(encoding="utf-8")
     for k, v in PLACEHOLDERS.items():

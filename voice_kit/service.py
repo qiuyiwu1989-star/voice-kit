@@ -415,6 +415,20 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
         import urllib.parse as _up
         return _up.unquote(request.headers.get("x-user-id") or "")
 
+    def _mem_product(request: Request, authorization: Optional[str] = None) -> str:
+        """记忆归哪个产品命名空间（users/<product>/<uid>/）。
+
+        带了有效租户钥匙 → 租户的 product（缺省租户 id）；否则（UI/后台门票，通用 /talk 页）→ talk。
+        钥匙优先于门票：宿主产品带着自己的钥匙来，哪怕请求里恰好也有门票 cookie，也该落进宿主那一层——
+        不然 AI 教练的成年人会和 /talk 上随手报名的人混在一起。"""
+        raw = (authorization or request.headers.get("authorization") or "").removeprefix("Bearer ").strip()
+        if raw:
+            registry.maybe_reload()
+            t = registry.by_key(raw)
+            if t:
+                return MEM.safe_product(t.memory_product)
+        return MEM.TALK
+
     def _runs_local(ag: AG.Agent) -> bool:
         """配置级永远本地；代码级默认走上游，manifest `run: local` 时按六层文件本地跑（上游没就绪的过渡态）。"""
         up = (ag.manifest.get("upstream") or {}).get("url") or ""
@@ -518,7 +532,8 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
                                      headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
         asm = AG.assemble(ag)
         # 记忆装配器 v0：按透镜给 agent 一张「我记得的他」。agent 自己不查库。
-        brief = MEM.briefing(_agents_root(), uid, ag.id, ag.lens, agent_name=ag.name) if uid else ""
+        brief = MEM.briefing(_agents_root(), _mem_product(request, authorization), uid, ag.id, ag.lens,
+                             agent_name=ag.name) if uid else ""
         if brief:
             asm["system_prompt"] += "\n\n" + brief
         lang = (body.get("lang") or "zh").lower()
@@ -703,14 +718,16 @@ li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;col
         AG.save_session(_agents_root(), ag.id, rec)
         uid = MEM.safe_uid(_hdr_uid(request) or body.get("uid") or "")
         facts_n = 0
+        product = _mem_product(request, authorization)
         if uid:
             root = _agents_root()
-            MEM.save_session(root, uid, {**rec, "agent_name": ag.name})
+            MEM.save_session(root, product, uid, {**rec, "agent_name": ag.name})
             # ③ 事实：平台抽，agent 中立；④ 判断：这个 agent 的回顾落它自己的分片
             new_facts = MEM.extract_facts(llm, turns, model=asm["model"])
-            facts_n = len(MEM.merge_facts(root, uid, new_facts, source_session=rec["session_id"])) if new_facts else len(MEM.load_facts(root, uid))
-            MEM.save_judgment(root, uid, ag.id, {"at": rec["at"], "session_id": rec["session_id"], "text": text})
-        return {"review": text, "session_id": rec["session_id"], "uid": uid, "facts": facts_n}
+            facts_n = len(MEM.merge_facts(root, product, uid, new_facts, source_session=rec["session_id"])) \
+                if new_facts else len(MEM.load_facts(root, product, uid))
+            MEM.save_judgment(root, product, uid, ag.id, {"at": rec["at"], "session_id": rec["session_id"], "text": text})
+        return {"review": text, "session_id": rec["session_id"], "uid": uid, "product": product, "facts": facts_n}
 
     @app.get("/me")
     def me_page(request: Request):
@@ -720,29 +737,32 @@ li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;col
         from fastapi.responses import HTMLResponse as _H
         return _H((Path(__file__).parent / "me.html").read_text(encoding="utf-8"))
 
-    def _uid_or_400(request: Request) -> str:
-        if not (_ui_authed(request) or _admin_authed(request)):
-            raise HTTPException(401, "需要门票")
+    def _uid_or_400(request: Request):
+        """(product, uid)。门票（/me 页）→ talk；租户钥匙 → 该租户的产品，只看得到自己产品下的这个人。"""
+        product = _mem_product(request)
+        if product == MEM.TALK and not (_ui_authed(request) or _admin_authed(request)):
+            raise HTTPException(401, "需要门票或租户钥匙")
         uid = MEM.safe_uid(_hdr_uid(request) or request.query_params.get("u") or "")
         if not uid:
             raise HTTPException(400, "缺 X-User-Id（在对话页「我是」里填个名字）")
-        return uid
+        return product, uid
 
     @app.get("/v1/users/me/memory")
     def my_memory(request: Request):
-        uid = _uid_or_400(request); root = _agents_root()
-        return {"uid": uid, "sessions": MEM.session_summaries(root, uid), "facts": MEM.load_facts(root, uid),
-                "judgments": {k: v[-3:] for k, v in MEM.load_judgments(root, uid).items()},
-                "reviews": MEM.load_reviews(root, uid), "methods": MEM.REVIEW_METHODS}
+        product, uid = _uid_or_400(request); root = _agents_root()
+        return {"uid": uid, "product": product, "sessions": MEM.session_summaries(root, product, uid),
+                "facts": MEM.load_facts(root, product, uid),
+                "judgments": {k: v[-3:] for k, v in MEM.load_judgments(root, product, uid).items()},
+                "reviews": MEM.load_reviews(root, product, uid), "methods": MEM.REVIEW_METHODS}
 
     @app.post("/v1/users/me/review")
     async def my_review(request: Request):
         """多场综合复盘。method: timeline / themes / agent（用某个 agent 的方法论）。"""
-        uid = _uid_or_400(request); root = _agents_root()
+        product, uid = _uid_or_400(request); root = _agents_root()
         body = await request.json()
         method = str(body.get("method") or "timeline")
         want = set(body.get("session_ids") or [])
-        sessions = [s for s in MEM.load_sessions(root, uid) if not want or s.get("session_id") in want][:12]
+        sessions = [s for s in MEM.load_sessions(root, product, uid) if not want or s.get("session_id") in want][:12]
         if not sessions:
             raise HTTPException(400, "没有可复盘的场次")
         sys_prompt, model = "", None
@@ -757,7 +777,7 @@ li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;col
         rec = {"at": __import__("datetime").datetime.now().isoformat(timespec="seconds"), "method": method,
                "method_label": labels.get(method, method), "agent": body.get("agent") if method == "agent" else None,
                "session_ids": [s.get("session_id") for s in sessions], "text": text}
-        MEM.save_review(root, uid, rec)
+        MEM.save_review(root, product, uid, rec)
         return rec
 
     @app.get("/v1/agents/{agent_id}/voices")
@@ -792,5 +812,8 @@ li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;col
     # 只在配了 VOICEKIT_ADMIN_TOKEN 时存在；没配就 404。真源是 agents/ 目录的文件。
     from .admin import build_router
     app.include_router(build_router())
+    # 用户记忆后台 /admin/memory：同一张后台门票，和 Agent 管理并列
+    from .memory_admin import build_router as build_memory_router
+    app.include_router(build_memory_router(known_products=lambda: [t.memory_product for t in registry.all()]))
 
     return app

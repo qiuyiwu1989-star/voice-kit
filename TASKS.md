@@ -43,6 +43,11 @@
       · 记忆库 `voice_kit/memory.py`：users/<uid>/ 下 ① sessions ③ facts（平台抽、agent 中立、重复出现 seen+1）
         ④ judgments 按 agent 分片；`briefing()` 按透镜装配速览卡进 system prompt；`/me` 页：场次、事实、
         多场综合复盘（timeline / themes / agent 三种方法）。uid 来自用户端自报名字（X-User-Id，URL 编码），只够内测。
+- [x] **统一后台 · 用户记忆第一版**（2026-09-16，分支 stream/memory-admin，spec 014 §10.6）：记忆按产品分命名空间
+      `users/<product>/<uid>/`（租户钥匙 → `Tenant.product` 缺省租户 id；/talk 门票 → talk；旧平铺目录只在 talk 下兼容读、
+      首次写入自动挪、`memory.migrate_legacy()` 一次挪完）。`/admin/memory`：按产品看用户、逐句转写、事实改/删、
+      判断只删、删用户（输入 uid 确认）、导出 JSON、每次改删导出写 `users/<product>/_audit.jsonl`。qiuqiu 后台只读（含导出）。
+      **待用户拍板**：qiuqiu 只读 + 不给导出这两个保守默认；审计里保留被删事实/判断的前 80 字摘要是否可以。
 - [ ] 记忆库 v1：uid 换成产品登录态；事实的可信度分层（corroborated 跨场重复 / trusted 家长确认）接上；
       判断测试（spec 012 §5.1）的跑器；事实抽取要用例守着（现在是纯 prompt）。
 - [ ] **对话性能第二轮：流式识别**。服务端 `tencent.stream()` 已有（WebSocket 到腾讯实时 ASR），缺一个

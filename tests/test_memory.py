@@ -54,23 +54,23 @@ def sse_text(r):
 # ---------------------------------------------------------------- 纯函数
 
 def test_facts_merge_dedupes_and_counts(root):
-    M.merge_facts(root, "小邱", [{"category": "constraint", "content": "预算三千", "quote": "三千"}], source_session="s1")
-    M.merge_facts(root, "小邱", [{"category": "constraint", "content": "预算三千"}, {"category": "nope", "content": "x"}], source_session="s2")
-    f = M.load_facts(root, "小邱")
+    M.merge_facts(root, "talk", "小邱", [{"category": "constraint", "content": "预算三千", "quote": "三千"}], source_session="s1")
+    M.merge_facts(root, "talk", "小邱", [{"category": "constraint", "content": "预算三千"}, {"category": "nope", "content": "x"}], source_session="s2")
+    f = M.load_facts(root, "talk", "小邱")
     assert len(f) == 1 and f[0]["seen"] == 2 and f[0]["quote"] == "三千"
     assert M.safe_uid(" 小邱/../x ") == "小邱x"
 
 
 def test_briefing_follows_lens(root):
-    M.merge_facts(root, "u", [{"category": "constraint", "content": "预算三千"}, {"category": "relation", "content": "孩子上五年级"}])
-    M.save_session(root, "u", {"session_id": "s1", "agent": "kefu-xiaoan", "at": "2026-09-14T10:00:00", "turns": [], "review": "上次：先接情绪。"})
-    M.save_judgment(root, "u", "kefu-xiaoan", {"at": "x", "session_id": "s1", "text": "他要的是被听见。"})
+    M.merge_facts(root, "talk", "u", [{"category": "constraint", "content": "预算三千"}, {"category": "relation", "content": "孩子上五年级"}])
+    M.save_session(root, "talk", "u", {"session_id": "s1", "agent": "kefu-xiaoan", "at": "2026-09-14T10:00:00", "turns": [], "review": "上次：先接情绪。"})
+    M.save_judgment(root, "talk", "u", "kefu-xiaoan", {"at": "x", "session_id": "s1", "text": "他要的是被听见。"})
     lens = {"read": {"facts": ["constraint"], "recap": "last_session", "judgments": "own"}}
-    b = M.briefing(root, "u", "kefu-xiaoan", lens)
+    b = M.briefing(root, "talk", "u", "kefu-xiaoan", lens)
     assert "预算三千" in b and "孩子上五年级" not in b          # 透镜只读 constraint
     assert "上次" in b and "先接情绪" in b and "被听见" in b
-    assert M.briefing(root, "nobody", "kefu-xiaoan", lens) == ""
-    b2 = M.briefing(root, "u", "guwen-axun", {"read": {"facts": [], "recap": "none", "judgments": "own"}})
+    assert M.briefing(root, "talk", "nobody", "kefu-xiaoan", lens) == ""
+    b2 = M.briefing(root, "talk", "u", "guwen-axun", {"read": {"facts": [], "recap": "none", "judgments": "own"}})
     assert "被听见" not in b2                                   # 判断按 agent 分片
 
 
@@ -81,9 +81,10 @@ def test_review_writes_user_store_and_next_chat_gets_briefing(app, root):
     turns = [{"t": "0:02", "role": "user", "text": "我们预算三千以内"}, {"t": "0:05", "role": "bot", "text": "好。", "first_ms": 1000}]
     r = c.post("/v1/agents/kefu-xiaoan/review", json={"session_id": "s1", "turns": turns})
     assert r.status_code == 200 and r.json()["uid"] == "小邱" and r.json()["facts"] == 1
-    facts = M.load_facts(root, "小邱"); assert facts[0]["content"] == "预算每学期三千以内"      # 非法类别被丢
-    assert M.load_judgments(root, "小邱")["kefu-xiaoan"][0]["text"]
-    assert M.session_summaries(root, "小邱")[0]["agent_name"] == "小安 · 安抚型客服"
+    assert r.json()["product"] == "talk" and (root / "users" / "talk" / "小邱" / "facts.json").exists()
+    facts = M.load_facts(root, "talk", "小邱"); assert facts[0]["content"] == "预算每学期三千以内"      # 非法类别被丢
+    assert M.load_judgments(root, "talk", "小邱")["kefu-xiaoan"][0]["text"]
+    assert M.session_summaries(root, "talk", "小邱")[0]["agent_name"] == "小安 · 安抚型客服"
     # 下一场：速览卡进 system prompt
     r = c.post("/v1/agents/kefu-xiaoan/chat/completions", json={"stream": True, "messages": [{"role": "user", "content": "又是我"}]})
     assert r.status_code == 200
