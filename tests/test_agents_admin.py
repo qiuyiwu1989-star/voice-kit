@@ -482,3 +482,47 @@ def test_admin_page_never_paints_unimplemented_as_pass():
     src = (REPO / "voice_kit" / "admin.html").read_text(encoding="utf-8")
     assert "missing: {cls:'todo', mark:'—', word:'还没做'}" in src
     assert "判断测试跑器没写" in src
+
+
+# ---------------------------------------------------------------- 英文身份字段（name_en / blurb_en）
+# AI 教练的 Agent 广场切英文时，陪练对手显示中文名——因为注册表里本来就没有英文字段。
+# 真源在人设库，宿主产品不该自己编译名。
+
+def test_summary_carries_english_identity():
+    ag = A.load_agent(SEEDS / "kefu-xiaoan")
+    s = ag.summary()
+    assert s["name_en"] and s["blurb_en"]
+    # 口径和中文一致：「名字 · 类型」，对话里按「·」截短名
+    assert s["name_en"].split("·")[0].strip() == "Ann"
+
+
+def test_three_sparring_agents_have_english_identity():
+    for aid in ("kefu-xiaoan", "guwen-axun", "chengjiao-dacheng"):
+        ag = A.load_agent(SEEDS / aid)
+        s = ag.summary()
+        assert s["name_en"] and s["blurb_en"], aid
+        assert "·" in s["name_en"], aid
+        assert not [i for i in A.validate(ag) if "name_en" in i.message], aid
+
+
+def test_english_fields_are_optional_and_none_when_absent(root):
+    # 没写英文的 agent：不报错，summary 给 None（不拿中文顶替——退回由宿主决定）
+    ag = A.load_agent(root / "red-coach")
+    assert "name_en" not in ag.manifest and "blurb_en" not in ag.manifest
+    assert ag.summary()["name_en"] is None and ag.summary()["blurb_en"] is None
+    assert not [m for m in fails(A.validate(ag)) if "_en" in m]
+
+
+@pytest.mark.parametrize("key", ["name_en", "blurb_en"])
+@pytest.mark.parametrize("bad", ["", "   ", None, 42])
+def test_english_fields_if_present_must_be_non_empty_string(root, key, bad):
+    _edit_manifest(root, "guwen-axun", **{key: bad})
+    assert any(key in m for m in fails(A.validate(A.load_agent(root / "guwen-axun"))))
+
+
+def test_english_name_must_follow_same_name_type_convention(root):
+    # 中文是「阿询 · 顾问型销售」，英文不带「·」→ 对话里会把类型一起显示出来，给 warn
+    _edit_manifest(root, "guwen-axun", name_en="Quinn the Consultative Seller")
+    issues = A.validate(A.load_agent(root / "guwen-axun"))
+    assert any("name_en" in i.message and i.severity == "warn" for i in issues)
+    assert not [m for m in fails(issues) if "name_en" in m]

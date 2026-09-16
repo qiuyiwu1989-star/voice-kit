@@ -4,6 +4,8 @@ version: 0.1.0
 kind: config
 status: draft
 blurb: 比过几家了？我直接给你判断
+name_en: Frank · Straight-Talk Closer
+blurb_en: "Compared a few places already? I'll give you a straight call."
 archetype: 陪练对手
 audience:
   product: coach

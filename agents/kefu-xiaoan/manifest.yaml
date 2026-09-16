@@ -4,6 +4,8 @@ version: 0.1.0
 kind: config
 status: draft
 blurb: 有什么不顺心的，跟我说
+name_en: Ann · Empathetic Support
+blurb_en: "Something's not right? Take your time, I'm listening."
 archetype: 陪练对手
 audience:
   product: coach

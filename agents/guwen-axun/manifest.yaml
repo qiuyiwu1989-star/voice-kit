@@ -4,6 +4,8 @@ version: 0.1.0
 kind: config
 status: draft
 blurb: 先聊聊孩子的情况，再说课
+name_en: Quinn · Consultative Sales
+blurb_en: "Tell me about your child first. Then we'll talk classes."
 archetype: 陪练对手
 audience:
   product: coach

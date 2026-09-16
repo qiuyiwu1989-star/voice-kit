@@ -26,6 +26,7 @@ import yaml
 
 LAYERS = ("manifest.yaml", "persona.md", "method.md", "playbook.md", "lens.yaml")
 TEXT_LAYERS = ("persona.md", "method.md", "playbook.md")
+EN_FIELDS = ("name_en", "blurb_en")   # 可选的英文身份字段；人格/方法论层不翻，模型按对话语言自己说
 
 # ---------------------------------------------------------------- 平台字典（v0：先枚举出来，改这里要同步 spec 014）
 
@@ -197,6 +198,12 @@ class Agent:
     @property
     def read_level(self) -> str: return str(self.manifest.get("read_level") or "")
 
+    def _en(self, key: str) -> Optional[str]:
+        v = self.manifest.get(key)
+        if v is None:
+            return None
+        return str(v).strip() or None
+
     def summary(self) -> dict:
         a = self.manifest.get("audience") or {}
         return {"id": self.id, "name": self.name, "version": self.version, "kind": self.kind,
@@ -207,6 +214,11 @@ class Agent:
                 "model": self.manifest.get("model"),
                 "mode": self.manifest.get("mode") or "video",
                 "blurb": self.manifest.get("blurb") or "",
+                # 英文身份字段。没写就给 None 而不是空串、也不拿中文顶上——
+                # 宿主产品用 `nameEn ?? name` 自己决定退回，模块替它退回的话，
+                # 它就分不清「这个 agent 没有英文名」和「英文名恰好是中文」。
+                "name_en": self._en("name_en"),
+                "blurb_en": self._en("blurb_en"),
                 # 这个 agent 服务宿主产品的哪些「壳」。REP 靠它把 slug 解析成 agent，
                 # 不用在自己库里加列（spec 009 §4 原来打算加 Shell.agentId，这样就不用了）
                 "shells": list(self.manifest.get("shells") or [])}
@@ -342,6 +354,18 @@ def validate(ag: Agent, *, author_level: str = "L0",
             owner = (other_shells or {}).get(sh)
             if owner:
                 out.append(Issue("manifest.yaml", f"壳 {sh} 已被 {owner} 认领——一个壳只能归一个 agent"))
+    # 英文身份字段（name_en / blurb_en）：可选——大多数 agent 只服务中文产品，没写不该报错。
+    # 但写了就不能是空串：`name_en: ""` 会让宿主的 `nameEn ?? name` 取到空串，
+    # 英文页面上卡片直接没名字，比显示中文名更糟。
+    for key in EN_FIELDS:
+        if key in m and not (isinstance(m[key], str) and m[key].strip()):
+            out.append(Issue("manifest.yaml", f"{key} 写了就要是非空字符串（不需要英文就整行删掉）"))
+    # 口径对齐：中文 name 用「名字 · 类型」，对话里只显示「·」前的名字（service 里 split("·")）。
+    # 英文那边要用同一个分隔，否则英文页面上对话里会带着类型一起显示。
+    ne = m.get("name_en")
+    if isinstance(ne, str) and ne.strip() and ("·" in str(m.get("name") or "")) != ("·" in ne):
+        out.append(Issue("manifest.yaml", "name 和 name_en 要么都用「名字 · 类型」，要么都不用——"
+                                          "对话里按「·」截短名", "warn"))
     if m.get("mode") not in (None, "video", "voice", "text"):
         out.append(Issue("manifest.yaml", "mode 只能是 video / voice / text"))
 
