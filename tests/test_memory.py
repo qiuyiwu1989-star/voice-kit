@@ -108,18 +108,21 @@ def test_my_memory_and_multi_review(app, root):
     assert c.get("/me").status_code == 200 and "综合复盘" in c.get("/me").text
 
 
-def test_code_level_agents_run_local_and_listed(app):
+def test_code_level_agents_run_local_and_listed(app, root):
     """球球和邱老师的上游还没实现，先本地跑（run: local）。
-    red-coach 2026-09-16 起走上游（REP 的 orchestrate），不在这条里。"""
+    red-coach 2026-09-16 先走上游、同日又改成配置级，不在这条里。"""
     c = TestClient(app, cookies={"vk_ui": "go"})
     for aid, mark in (("qiuqiu", "球球老师"), ("qiu-laoshi", "邱老师")):
         r = c.post(f"/v1/agents/{aid}/chat/completions", json={"stream": True, "messages": [{"role": "user", "content": "你好"}]})
         assert r.status_code == 200 and sse_text(r) == "好的，您慢慢说。", aid
         assert mark in app.state.fake.systems[-1]
+    from tests.test_agent_chat import make_host_bound
+    make_host_bound(root)
     idx = c.get("/talk").text
     assert "球球老师" in idx and "本地试运行" in idx
-    # red-coach 的大脑在 AI 教练里，通用页不给直接开，链去宿主（2026-09-16）
-    assert "RED 融资叙事教练" in idx and "在 AI 教练里练" in idx
+    # 宿主型 agent 通用页不给直接开，链去宿主（2026-09-16）；RED 已改配置级，照常能开
+    assert "宿主演示教练" in idx and "在 AI 教练里练" in idx
+    assert "RED 融资叙事教练" in idx
     page = c.get("/talk/qiuqiu").text
     assert "mode: '__MODE__'" not in page and "mode: 'voice'" in page
     page2 = c.get("/talk/kefu-xiaoan").text

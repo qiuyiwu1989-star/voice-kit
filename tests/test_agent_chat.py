@@ -20,6 +20,22 @@ def root(tmp_path):
     dst = tmp_path / "agents"; shutil.copytree(REPO / "agents", dst); return dst
 
 
+def make_host_bound(root, aid="host-demo"):
+    """造一个「宿主型」agent：代码级 + 走上游，大脑在宿主产品里。
+    原来测试直接拿 red-coach 当例子；2026-09-16 RED 改成配置级后，这类 agent 仓库里暂时没有真实实例，
+    但通用页挡住它的逻辑还要守着——下一个接宿主状态机的 agent 会用到。"""
+    import yaml
+    d = root / aid
+    shutil.copytree(root / "red-coach", d)
+    m = yaml.safe_load((d / "manifest.yaml").read_text(encoding="utf-8"))
+    m.update(id=aid, name="宿主演示教练", kind="code", version="1.0.0",
+             upstream={"url": "http://127.0.0.1:9/api/agent/demo/chat", "key_env": "REP_AGENT_KEY"},
+             entry="https://jiaolian.qiuyiwu.com/s/founder-pitch/talk?v=2", voice="coach")
+    m.pop("shells", None); m.pop("model", None); m.pop("name_en", None); m.pop("blurb_en", None)
+    (d / "manifest.yaml").write_text(yaml.safe_dump(m, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return aid
+
+
 class ScriptedLLM:
     def __init__(self): self.script = {}; self.calls = []; self.systems = []
     def stream(self, messages, **kw):
@@ -380,12 +396,12 @@ def test_agents_list_accepts_ui_ticket(app, monkeypatch):
     assert "red-coach" in ids and "guwen-axun" in ids
 
 
-def test_voices_default_is_resolved_not_a_role_name(app, monkeypatch):
+def test_voices_default_is_resolved_not_a_role_name(app, root, monkeypatch):
     """manifest 的 voice 可以写角色名。**回给前端的必须是编号** ——
     角色名匹配不上选择器里任何一项，于是显示一个、合成又用另一个（2026-09-16 踩到）。"""
     monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
     c = TestClient(app, cookies={"vk_ui": "go"})
-    red = c.get("/v1/agents/red-coach/voices?lang=zh").json()
+    red = c.get(f"/v1/agents/{make_host_bound(root)}/voices?lang=zh").json()   # manifest 写的是 voice: coach
     assert red["default"] == 602004                      # coach → 暖心阿灿
     assert red["options"][0]["id"] == 602004             # 默认那个排最前
     da = c.get("/v1/agents/chengjiao-dacheng/voices?lang=zh").json()
@@ -394,12 +410,13 @@ def test_voices_default_is_resolved_not_a_role_name(app, monkeypatch):
 
 # ---------------------------------------------------------------- 宿主型 agent 不能从通用页直接开
 
-def test_host_bound_agent_is_not_startable_from_generic_talk_page(app, monkeypatch):
+def test_host_bound_agent_is_not_startable_from_generic_talk_page(app, root, monkeypatch):
     """RED 的大脑在 AI 教练里，要那边建好的一场才能工作。通用页自己编会话 id →
     宿主库里没有 → 404。2026-09-16 用户在通用页点 RED，第一句就挂。"""
     monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
     c = TestClient(app, cookies={"vk_ui": "go"})
-    page = c.get("/talk/red-coach").text
+    hid = make_host_bound(root)
+    page = c.get(f"/talk/{hid}").text
     assert "SESSION =" not in page                       # 不给一个必挂的对话页
     assert "jiaolian.qiuyiwu.com/s/founder-pitch" in page  # 给去宿主的出口
     idx = c.get("/talk").text
@@ -453,8 +470,9 @@ def test_ident_json_cannot_close_the_script_tag(root):
     assert "<" not in out and json.loads(out)["en"]["blurb"] == "</script><script>alert(1)</script>"
 
 
-def test_talk_index_in_english(app, monkeypatch):
+def test_talk_index_in_english(app, root, monkeypatch):
     monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    make_host_bound(root)
     c = TestClient(app, cookies={"vk_ui": "go"})
     idx = c.get("/talk?lang=en&k=go").text
     assert "Ann · Empathetic Support" in idx and "Quinn · Consultative Sales" in idx and "Frank · Straight-Talk Closer" in idx
@@ -471,10 +489,11 @@ def test_talk_index_in_english(app, monkeypatch):
     assert "在 AI 教练里练 ↗" in zh and "小安 · 安抚型客服" in zh and 'href="/talk?lang=en&amp;k=go"' in zh
 
 
-def test_host_exit_page_in_english(app, monkeypatch):
+def test_host_exit_page_in_english(app, root, monkeypatch):
     monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
     c = TestClient(app, cookies={"vk_ui": "go"})
-    page = c.get("/talk/red-coach?lang=en").text
+    hid = make_host_bound(root)
+    page = c.get(f"/talk/{hid}?lang=en").text
     assert "SESSION =" not in page and "Practice there" in page and "jiaolian.qiuyiwu.com/s/founder-pitch" in page
     assert "去那边练" not in page
-    assert "去那边练" in c.get("/talk/red-coach").text
+    assert "去那边练" in c.get(f"/talk/{hid}").text

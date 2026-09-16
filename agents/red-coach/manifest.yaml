@@ -1,26 +1,26 @@
 id: red-coach
 name: RED 融资叙事教练
-version: 1.0.0
-kind: code
+short_name: RED
+version: 2.0.0
+kind: config
 status: production
 archetype: 教练
+blurb: 陪你把融资故事讲到投资人听得懂
 audience:
   product: coach
   bands: [adult]
-mode: voice   # 用户端默认：video / voice / text，页面上可切
+mode: video   # 用户端默认：video / voice / text，页面上可切
 shells:   # 这个 agent 服务 AI 教练的哪些壳（真源在这里，REP 不加列不迁移）
   - founder-pitch
   - sarah-chen
 read_level: L0
 rails: no_scoring
-voice: coach
+model: deepseek-v4-flash
+voice: 501003   # 用户 2026-09 选定的男声
 layers: [persona.md, method.md, playbook.md]
-upstream:
-  # REP 自己的四段状态机（orchestrate）。同一台机器，走 127.0.0.1 不绕公网。
-  # 会话身份靠 X-Session-Id（= takeId）转过去，见 REP 的 /api/agent/red/chat。
-  url: http://127.0.0.1:3004/api/agent/red/chat
-  key_env: REP_AGENT_KEY
-# 从通用对话页点它时，带人去这里练（它的大脑在 AI 教练里，没有那边的一场就没法工作）
-entry: https://jiaolian.qiuyiwu.com/s/founder-pitch/talk?v=2
-companion: listener     # 通话中在场的是听众，教练在复盘后开口
-notes: 方法论在 AI 教练的 MethodPage/Criterion 表里（nine.ts 是 seed），这里是摘要。
+updated_at: 2026-09-16
+notes: >-
+  2.0.0（2026-09-16）从代码级改成配置级。原来上游是 REP 的四段状态机（开场/独白/追问/复盘），
+  通话里的话由判据表和模板挑出来，用户反馈「死板、像只在听我讲」。
+  现在和大成一样由模型按这三份文件现想，每一轮都回话。九页判据仍在 REP，只用于通话结束后的复盘。
+  要退回旧行为：kind 改回 code 并恢复 upstream（备份在 red-coach.bak-*）。
