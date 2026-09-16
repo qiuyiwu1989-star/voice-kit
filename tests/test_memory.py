@@ -118,7 +118,8 @@ def test_code_level_agents_run_local_and_listed(app):
         assert mark in app.state.fake.systems[-1]
     idx = c.get("/talk").text
     assert "球球老师" in idx and "本地试运行" in idx
-    assert "RED 融资叙事教练" in idx and "上游" in idx      # red-coach 走上游，标注要跟着变
+    # red-coach 的大脑在 AI 教练里，通用页不给直接开，链去宿主（2026-09-16）
+    assert "RED 融资叙事教练" in idx and "在 AI 教练里练" in idx
     page = c.get("/talk/qiuqiu").text
     assert "mode: '__MODE__'" not in page and "mode: 'voice'" in page
     page2 = c.get("/talk/kefu-xiaoan").text
@@ -132,4 +133,5 @@ def test_code_level_upstream_proxy_path(app, root, monkeypatch):
     p.write_text(yaml.safe_dump(m, allow_unicode=True, sort_keys=False), encoding="utf-8")
     c = TestClient(app, cookies={"vk_ui": "go"})
     r = c.post("/v1/agents/qiuqiu/chat/completions", json={"stream": True, "messages": [{"role": "user", "content": "你好"}]})
-    assert r.status_code == 200 and "上游没接上" in sse_text(r)
+    # 上游挂了说人话，不把技术错误塞进 agent 嘴里（原来是「上游没接上：上游 HTTP 404」，会被念出来）
+    assert r.status_code == 200 and "连不上" in sse_text(r) and "HTTP" not in sse_text(r)

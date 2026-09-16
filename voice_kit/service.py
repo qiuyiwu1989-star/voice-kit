@@ -426,10 +426,27 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
                     if t:
                         yield _sse(_chunk(cid, model, t))
             except Exception as e:
-                yield _sse(_chunk(cid, model, f"（上游没接上：{e}）"))
+                # ⚠️ 不把技术错误塞进 agent 嘴里。原来这里是「（上游没接上：上游 HTTP 404）」——
+                # 转写面板上显示成 agent 说的话，开着朗读还会被一字一句念出来（2026-09-16 用户撞到）。
+                # 原因留在服务端日志，给人的是一句人话。
+                print(f"[agent/{ag.id}] 上游失败: {e}", flush=True)
+                yield _sse(_chunk(cid, model, "我这边暂时连不上，稍等一下再说。"))
             yield _sse(_chunk(cid, model, None, "stop"))
             yield b"data: [DONE]\n\n"
         return gen()
+
+    def _needs_host(ag: AG.Agent) -> bool:
+        """这个 agent 的大脑在宿主产品里，**只能从宿主产品进**。
+
+        代码级、走上游的 agent（RED 的上游是 AI 教练的四段状态机）需要宿主那边的一场
+        「练习」才能工作 —— 上游按会话 id 去自己的库里找那一场。通用对话页自己随手编一个
+        会话 id，宿主库里没有，于是 404（2026-09-16：用户在通用页点 RED 教练，第一句就挂）。
+        """
+        return ag.kind == "code" and not _runs_local(ag)
+
+    def _host_entry(ag: AG.Agent) -> str:
+        """宿主产品的入口。manifest 里 `entry:` 写了就用它，没写就空 —— 不猜地址。"""
+        return str(ag.manifest.get("entry") or "")
 
     def _agent_auth(request: Request, authorization: Optional[str], ag: AG.Agent) -> None:
         if _admin_authed(request) or _ui_authed(request):
@@ -523,6 +540,16 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             from fastapi.responses import HTMLResponse as _H
             return _H("<meta charset=utf-8><p>需要门票：地址后面加 <code>?k=&lt;VOICEKIT_UI_TOKEN&gt;</code></p>", 401)
         ag = AG.load_agent(d)
+        if _needs_host(ag):
+            from fastapi.responses import HTMLResponse as _H
+            entry = _host_entry(ag)
+            link = f'<p><a href="{entry}">去那边练 →</a></p>' if entry else "<p>从它所在的产品里进入。</p>"
+            return _H(f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>{ag.name}</title><style>body{{font:16px/1.7 -apple-system,"PingFang SC",sans-serif;margin:0;padding:48px 24px;background:#F5F6F8;color:#1B2028}}
+main{{max-width:30em;margin:0 auto}} a{{color:#5A4FE6}} small{{color:#7B8494}}</style>
+<main><h1>{ag.name}</h1>
+<p>这个 agent 的方法论跑在它所在的产品里——每一场练习都要在那边建好，它才知道你讲到了哪一页。</p>
+{link}<p><small>这里是通用对话页，只能直接开「人设在这里」的 agent。</small></p></main>""", 200)
         html = (Path(__file__).parent / "talk.html").read_text(encoding="utf-8")
         blurb = str(ag.manifest.get("blurb") or ag.manifest.get("archetype") or "")
         # 对话里只显示名字，不带「· 直达型成交」这种类型后缀（2026-09-14 用户要求）
@@ -559,11 +586,16 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             from fastapi.responses import HTMLResponse as _H
             return _H("<meta charset=utf-8><p>需要门票：地址后面加 <code>?k=&lt;VOICEKIT_UI_TOKEN&gt;</code></p>", 401)
         k = request.query_params.get("k", "")
-        items = "".join(
-            f'<li><a href="/talk/{a.id}{"?k=" + k if k else ""}"><b>{a.name}</b>'
-            f'<small>{a.manifest.get("blurb") or a.manifest.get("archetype") or ""} · {a.manifest.get("model") or "默认模型"}'
-            f'{" · 本地试运行" if a.kind == "code" and _runs_local(a) else ""}{" · 上游" if a.kind == "code" and not _runs_local(a) else ""}</small></a></li>'
-            for a in AG.load_all(_agents_root()) if not [i for i in AG.validate(a) if i.severity == "fail"])
+        def _row(a):
+            # 宿主型 agent 直接链去宿主产品 —— 在这里点开必挂（见 _needs_host）
+            host = _needs_host(a)
+            href = (_host_entry(a) or f"/talk/{a.id}") if host else f'/talk/{a.id}{"?k=" + k if k else ""}'
+            tag = " · 在 AI 教练里练 ↗" if host else (" · 本地试运行" if a.kind == "code" else "")
+            return (f'<li><a href="{href}"><b>{a.name}</b>'
+                    f'<small>{a.manifest.get("blurb") or a.manifest.get("archetype") or ""} · '
+                    f'{a.manifest.get("model") or "默认模型"}{tag}</small></a></li>')
+        items = "".join(_row(a) for a in AG.load_all(_agents_root())
+                        if not [i for i in AG.validate(a) if i.severity == "fail"])
         from fastapi.responses import HTMLResponse as _H
         return _H(f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>选一个聊</title><style>body{{font:16px/1.6 -apple-system,"PingFang SC",sans-serif;margin:0;padding:24px;background:#F5F6F8;color:#1B2028}}

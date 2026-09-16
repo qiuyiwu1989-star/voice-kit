@@ -20,5 +20,7 @@ upstream:
   # 会话身份靠 X-Session-Id（= takeId）转过去，见 REP 的 /api/agent/red/chat。
   url: http://127.0.0.1:3004/api/agent/red/chat
   key_env: REP_AGENT_KEY
+# 从通用对话页点它时，带人去这里练（它的大脑在 AI 教练里，没有那边的一场就没法工作）
+entry: https://jiaolian.qiuyiwu.com/s/founder-pitch/talk?v=2
 companion: listener     # 通话中在场的是听众，教练在复盘后开口
 notes: 方法论在 AI 教练的 MethodPage/Criterion 表里（nine.ts 是 seed），这里是摘要。

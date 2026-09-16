@@ -388,3 +388,29 @@ def test_voices_default_is_resolved_not_a_role_name(app, monkeypatch):
     assert red["options"][0]["id"] == 602004             # 默认那个排最前
     da = c.get("/v1/agents/chengjiao-dacheng/voices?lang=zh").json()
     assert da["default"] == 603003                       # 本来就是编号，原样
+
+
+# ---------------------------------------------------------------- 宿主型 agent 不能从通用页直接开
+
+def test_host_bound_agent_is_not_startable_from_generic_talk_page(app, monkeypatch):
+    """RED 的大脑在 AI 教练里，要那边建好的一场才能工作。通用页自己编会话 id →
+    宿主库里没有 → 404。2026-09-16 用户在通用页点 RED，第一句就挂。"""
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    c = TestClient(app, cookies={"vk_ui": "go"})
+    page = c.get("/talk/red-coach").text
+    assert "SESSION =" not in page                       # 不给一个必挂的对话页
+    assert "jiaolian.qiuyiwu.com/s/founder-pitch" in page  # 给去宿主的出口
+    idx = c.get("/talk").text
+    assert "在 AI 教练里练" in idx and 'href="https://jiaolian.qiuyiwu.com/s/founder-pitch/talk?v=2"' in idx
+    # 人设在这里的 agent 照常能开
+    assert "SESSION =" in c.get("/talk/kefu-xiaoan").text
+
+
+def test_upstream_failure_is_not_spoken_as_agent_words(app, root):
+    """上游挂了不许把「上游 HTTP 404」塞进 agent 嘴里——开着朗读会被念出来。"""
+    import yaml
+    p = root / "qiuqiu" / "manifest.yaml"; m = yaml.safe_load(p.read_text(encoding="utf-8")); m.pop("run", None)
+    p.write_text(yaml.safe_dump(m, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    t = sse_text(chat(TestClient(app), "qiuqiu", "你好", Authorization="Bearer door"))
+    assert "HTTP" not in t and "上游" not in t
+    assert "连不上" in t
