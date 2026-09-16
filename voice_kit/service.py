@@ -666,7 +666,11 @@ li a b{{display:block}} li a small{{color:#7B8494}}
             raise HTTPException(404)
         ag = AG.load_agent(d)
         _agent_auth(request, authorization, ag)
-        default = ag.manifest.get("voice")
+        # manifest 的 voice 可以写角色名（"coach"）也可以写编号（603003）。
+        # **回给调用方的必须是解析后的编号** —— 角色名传给前端，选择器匹配不上任何一项，
+        # 于是显示第一个、实际合成又用另一个（2026-09-16：RED 的嗓子显示成儿童音色）。
+        raw = ag.manifest.get("voice")
+        default = V.resolve(str(raw) if raw is not None else "assistant", override=raw)
         return {"default": default, "options": V.options_for(lang, default=default if lang != "en" else None)}
 
     @app.get("/v1/agents/{agent_id}/prompt")
