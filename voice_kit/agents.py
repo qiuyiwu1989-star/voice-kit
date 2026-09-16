@@ -191,7 +191,9 @@ class Agent:
                 "product": a.get("product"), "bands": a.get("bands"),
                 "status": self.manifest.get("status", ""),
                 "archetype": self.manifest.get("archetype", ""),
-                "model": self.manifest.get("model")}
+                "model": self.manifest.get("model"),
+                "mode": self.manifest.get("mode") or "video",
+                "blurb": self.manifest.get("blurb") or ""}
 
 
 # ---------------------------------------------------------------- 读

@@ -2,7 +2,6 @@ id: red-coach
 name: RED 融资叙事教练
 version: 1.0.0
 kind: code
-run: local  # AI 教练的 /api/realtime/llm/[takeId] 要一次性钥匙，不能直连；先本地跑
 status: production
 archetype: 教练
 audience:
@@ -14,7 +13,9 @@ rails: no_scoring
 voice: coach
 layers: [persona.md, method.md, playbook.md]
 upstream:
-  url: https://jiaolian.qiuyiwu.com/api/realtime/llm
-  hooks: https://jiaolian.qiuyiwu.com/api/realtime/callback
+  # REP 自己的四段状态机（orchestrate）。同一台机器，走 127.0.0.1 不绕公网。
+  # 会话身份靠 X-Session-Id（= takeId）转过去，见 REP 的 /api/agent/red/chat。
+  url: http://127.0.0.1:3004/api/agent/red/chat
+  key_env: REP_AGENT_KEY
 companion: listener     # 通话中在场的是听众，教练在复盘后开口
 notes: 方法论在 AI 教练的 MethodPage/Criterion 表里（nine.ts 是 seed），这里是摘要。
