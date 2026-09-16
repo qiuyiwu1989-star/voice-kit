@@ -69,6 +69,18 @@ dialog input,dialog select{width:100%}
 .m span{white-space:pre-wrap}
 .m.user span{color:var(--ink2)}
 .m i{font-style:normal;font-size:11px;color:var(--ink3);white-space:nowrap}
+/* 「还没做」故意用灰白虚线，不用任何近似绿色的颜色——空位不许长得像通过 */
+.pill.todo{background:transparent;color:var(--ink3);border:1px dashed var(--line2)}
+.card4 b.todo{font-size:15px;color:var(--ink3);font-weight:500}
+ol.gates{list-style:none;margin:0;padding:0}
+ol.gates li.g{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+ol.gates li.g:last-child{border-bottom:0}
+.gmark{font-size:18px;line-height:1.2;text-align:center}
+.gmark.acc{color:var(--acc)}.gmark.bad{color:var(--bad)}.gmark.warn{color:var(--warn)}.gmark.todo{color:var(--ink3)}
+ol.gates code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--ink3)}
+.recap{border:1px solid var(--line);background:var(--paper);padding:10px 12px;margin:8px 0}
+.recap .rtext{white-space:pre-wrap;margin-top:4px}
+a.dl{font-size:13px;color:var(--acc);text-decoration:none;border:1px solid var(--line2);padding:6px 12px;border-radius:4px}
 #promptView{white-space:pre-wrap;font-size:12px;background:var(--mono);border:1px solid var(--line);padding:12px;max-height:40vh;overflow:auto}
 </style>
 </head>
@@ -103,6 +115,9 @@ const API = '/admin/agents/api';
 const LAYERS = ['manifest.yaml','persona.md','method.md','playbook.md','lens.yaml'];
 const LAYER_LABEL = {'manifest.yaml':'0 身份','persona.md':'1 人格','method.md':'2 方法论','playbook.md':'3 策略','lens.yaml':'4 透镜'};
 let DICT = null, LIST = [], CUR = null, TAB = 'manifest.yaml', DIRTY = {};
+// 全库的壳 → agent 对照表。顶层只声明不取值——取值要 fetch，而顶层 await 会把
+// 整个脚本的加载卡住（9-14 那次页面点什么都没反应就是加载期出的事）。
+let LIST_SHELLS = null;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -115,12 +130,25 @@ async function api(path, opt={}){
 const pill = (t,c='') => `<span class="pill ${c}">${esc(t)}</span>`;
 const statusPill = s => s==='production'?pill('生产中','acc'):s==='draft'?pill('草案','warn'):pill(s||'—');
 
+async function loadShells(){ try{ LIST_SHELLS = await api('/shells'); }catch(e){ LIST_SHELLS = null; } }
+
+// 保存接口会带回 commit：null=没开自动提交，ok=提交了，否则告诉人为什么没提交上。
+// 提交失败不等于保存失败——文件已经写下去了，只是这次改动没留痕。
+function commitNote(d){
+  const c = d && d.commit;
+  if(!c) return '';
+  if(c.ok) return c.noop ? '（内容没变，没产生提交）' : ' · 已提交 '+(c.hash||'');
+  return ' · ⚠ 没能提交：'+(c.reason||'');
+}
+
 async function loadList(){
   const d = await api('/list'); LIST = d.agents; $('#root').textContent = d.root;
+  if(d.shells) LIST_SHELLS = d.shells;
   $('#list').innerHTML = LIST.map(a => `<button class="ag ${CUR&&CUR.id===a.id?'on':''}" data-id="${esc(a.id)}">
     <b>${esc(a.name)} <span class="mono" style="color:var(--ink3);font-weight:400">${esc(a.version)}</span></b>
     <small>${esc(a.archetype||'')} · ${esc(a.kind)} · ${esc(a.read_level)} · ${esc(a.rails)}</small><br>
     ${statusPill(a.status)} ${a.fails?pill(a.fails+' 处不过','bad'):pill('校验通过','acc')} ${a.warns?pill(a.warns+' 警告','warn'):''}
+    ${a.onboarding?pill('四关 '+a.onboarding.passed+'/'+a.onboarding.total, a.onboarding.passed===a.onboarding.total?'acc':'todo'):''}
   </button>`).join('');
   document.querySelectorAll('.ag').forEach(b => b.onclick = () => open(b.dataset.id));
 }
@@ -131,13 +159,56 @@ async function open(id){
 }
 
 function scorecard(sc){
-  const g = sc.guard, s = sc.speed;
+  const g = sc.guard, s = sc.speed, acc = sc.accuracy || {};
   const f = (v,u='') => v==null?'—':(v+u);
+  // 「准」这一栏**永远不显示分数**：判断测试跑器没写，编一个数比空着更坏。
+  // 它显示的是两样可核对的东西：声明了几个判断维度、有几场回顾可以人看。
+  const accSub = (acc.dims||[]).length
+    ? `声明 ${acc.dims.join(' / ')} · ${acc.n_recaps||0} 场回顾可看 ↓`
+    : `lens.yaml 里 write.judgments 是空的 · ${acc.n_recaps||0} 场回顾可看 ↓`;
   return `<div class="card4">
     <div><small>守线</small><b>${g.pass_rate==null?'—':g.pass_rate+'%'}</b><i>${g.n?`${g.n} 条 · ${g.fail} 失败 · ${g.suites.join(' / ')}`:'还没跑过套件'}</i></div>
-    <div><small>准</small><b>—</b><i>判断测试未接</i></div>
+    <div><small>准</small><b class="todo">还没做</b><i>判断测试跑器没写 · ${esc(accSub)}</i></div>
     <div><small>快</small><b>${f(s.p50==null?null:Math.round(s.p50),'ms')}</b><i>P90 ${f(s.p90==null?null:Math.round(s.p90),'ms')} · 目标 2500 / 6000</i></div>
     <div><small>被用</small><b>${sc.usage?sc.usage.sessions+' 场':'—'}</b><i>${sc.usage?`平均 ${sc.usage.avg_user_turns} 个来回 · 真实首字 P50 ${sc.usage.p50_first_ms??'—'}ms · 最近 ${sc.usage.last_at}`:'还没有真人对话'}</i></div></div>`;
+}
+
+// ---------------------------------------------------------------- 入职四关
+// 后端只给四种状态，前端一个字都不要改写。尤其是 missing：
+// 「还没实现」必须长得像没做，不许因为没人拦就画成绿的（spec 014 §10 验收标准）。
+const GATE_UI = {
+  pass:    {cls:'acc',  mark:'✓', word:'通过'},
+  fail:    {cls:'bad',  mark:'✗', word:'没过'},
+  todo:    {cls:'warn', mark:'○', word:'还没跑'},
+  missing: {cls:'todo', mark:'—', word:'还没做'},
+};
+function gatesHtml(gates){
+  if(!gates || !gates.length) return '';
+  const done = gates.filter(g=>g.status==='pass').length;
+  return `<section class="blk"><h3>入职四关 <span class="hint" style="font-weight:400">（${done} / ${gates.length} 过）</span></h3>
+    <ol class="gates">${gates.map(g=>{
+      const u = GATE_UI[g.status] || GATE_UI.missing;
+      return `<li class="g ${esc(g.status)}"><span class="gmark ${u.cls}">${u.mark}</span>
+        <div><b>${esc(g.name)}</b> ${pill(u.word, u.cls)}${g.suite?`<code class="mono">${esc(g.suite)}</code>`:''}
+        <div class="hint">${esc(g.detail||'')}${g.at?` · 上次 ${esc(g.at)}`:''}</div>
+        ${g.how?`<div class="hint">怎么过：${esc(g.how)}</div>`:''}</div></li>`;
+    }).join('')}</ol>
+    <p class="hint">「还没做」= 这一关的跑器还不存在，不是通过。别把空位当绿灯。</p></section>`;
+}
+
+// ---------------------------------------------------------------- 「准」的证据：维度 + 回顾原文
+function judgmentHtml(acc){
+  acc = acc || {};
+  const dims = acc.dims || [], rs = acc.recaps || [];
+  return `<section class="blk"><h3>判断证据（「准」这一栏的替代品）</h3>
+    <p class="hint">${esc(acc.why||'')}<br>
+      下面是能拿出来的两样：它<b>声明</b>按什么维度判断，和它<b>实际</b>判断出了什么。
+      对着看——是在用自己的方法论，还是在说放之四海皆准的套话。这需要人看，没有分数。</p>
+    <p>声明的判断维度（lens.yaml · write.judgments）：${dims.length?dims.map(d=>`<code>${esc(d)}</code>`).join(' '):'<span class="hint">空的——它没声明自己产出什么判断。</span>'}</p>
+    ${rs.length?rs.map(r=>`<div class="recap"><div class="hint mono">${esc(r.at||'')} · v${esc(r.version||'')} · ${esc(r.model||'')} · ${r.user_turns} 个来回</div>
+      <div class="rtext">${esc(r.review)}${r.truncated?' …（截断）':''}</div></div>`).join('')
+      :'<p class="hint">还没有回顾。用户端 /talk 的「结束并回顾」跑过之后会落到这里。</p>'}
+  </section>`;
 }
 
 function render(){
@@ -154,6 +225,8 @@ function render(){
     <button data-l="__try" class="${TAB==='__try'?'on':''}" style="margin-left:auto">💬 试聊</button></div>
   <div id="editor"></div>
   <div id="issues">${issuesHtml(a.issues)}</div>
+  ${gatesHtml(a.onboarding)}
+  ${shellsHtml(a)}
   <section class="blk"><h3>跑一套用例</h3>
     <div class="bar"><select id="suite"><option value="gate_contract">gate_contract · 闸门契约</option><option value="qiuqiu_8rules">qiuqiu_8rules · 8 铁律</option><option value="coach_no_scoring">coach_no_scoring · 不打分</option><option value="listener_describe_only">listener_describe_only · 听众只描述</option></select>
       <input id="svc" placeholder="服务地址" value="${location.origin}" style="min-width:260px"><input id="key" type="password" placeholder="该 agent 所属租户的钥匙" style="min-width:200px">
@@ -164,12 +237,60 @@ function render(){
   <section class="blk"><h3>真人对话（${(a.sessions||[]).length}）</h3>
     ${(a.sessions||[]).length?`<table><tr><th>时间</th><th>版本 / 模型</th><th>来回</th><th>回顾（节选）</th></tr>${a.sessions.map(s=>`<tr><td class="mono">${esc(s.at)}</td><td class="mono">${esc(s.version)} / ${esc(s.model||'')}</td><td>${s.user_turns}</td><td style="max-width:36em">${esc(s.review)}</td></tr>`).join('')}</table>`:'<p class="hint">还没有。用户端 /talk 结束并回顾之后会落到这里。</p>'}
   </section>
+  ${judgmentHtml(a.scorecard && a.scorecard.accuracy)}
   <section class="blk"><h3>历史（git log）</h3>
+    ${gitBanner(a.git)}
     ${a.history.length?`<table>${a.history.map(h=>`<tr><td class="mono">${esc(h.hash)}</td><td class="mono">${esc(h.date)}</td><td>${esc(h.subject)}</td></tr>`).join('')}</table>`:'<p class="hint">没有提交记录（未提交，或不在 git 仓库里）。</p>'}
+    <div class="bar"><a class="dl" href="${API}/export?agent=${encodeURIComponent(a.id)}">导出这个 agent 的六层文件 ↓</a>
+      <a class="dl" href="${API}/export">导出全部 ↓</a>
+      <span class="hint">只打六层文件，sessions / reports / users 不进包。</span></div>
   </section>`;
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { TAB=b.dataset.l; render(); });
   renderEditor();
+  bindShells();
   $('#btnTest').onclick = runTest;
+}
+
+// ---------------------------------------------------------------- 壳绑定
+// 一个壳被两个 agent 认领 → REP 解析 slug 时拿到哪个是随机的。
+// 所以这里除了能改，还要能一眼看见全库撞没撞。真正拦住的是后端。
+function shellsHtml(a){
+  const mine = a.shells || [];
+  const all = (LIST_SHELLS && LIST_SHELLS.bindings) || [];
+  const others = all.filter(b => !b.agents.includes(a.id));
+  return `<section class="blk"><h3>壳绑定（shells）</h3>
+    <p class="hint">这个 agent 服务宿主产品（AI 教练）的哪些壳。真源是 manifest.yaml 的 <code>shells</code>，
+      REP 靠它把 slug 解析成 agent，自己库里不加列。<b>一个壳只能归一个 agent</b>——撞了保存会被挡下。</p>
+    <div class="bar"><input id="shellsIn" class="grow" placeholder="用逗号或空格分隔，例如 founder-pitch, sarah-chen" value="${esc(mine.join(', '))}">
+      <button class="p" id="btnShells">保存壳绑定</button></div>
+    <p class="hint">不升版本：壳绑定是部署关系，不是人设内容。</p>
+    ${others.length?`<table><tr><th>别人已认领的壳</th><th>归谁</th></tr>${others.map(b=>`<tr><td class="mono">${esc(b.shell)}</td><td>${b.agents.map(x=>esc(x)).join(' + ')} ${b.conflict?pill('撞了','bad'):''}</td></tr>`).join('')}</table>`:'<p class="hint">全库没有别的 agent 认领壳。</p>'}
+  </section>`;
+}
+function bindShells(){
+  const btn = $('#btnShells'); if(!btn) return;
+  btn.onclick = async () => {
+    const raw = $('#shellsIn').value.split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
+    btn.disabled = true;
+    try{
+      CUR = await api('/'+CUR.id+'/shells', {method:'PUT', body: JSON.stringify({shells: raw})});
+      const note = commitNote(CUR);
+      await loadShells(); render(); loadList(); toast('壳绑定已保存'+note);
+    }catch(e){ toast('保存失败：'+e.message); }
+    finally{ const b=$('#btnShells'); if(b) b.disabled = false; }
+  };
+}
+
+// ---------------------------------------------------------------- 落盘留痕
+// 服务器上 agents/ 不是 git 工作副本（TASKS.md 2026-09-14 部署记录），
+// 所以「历史」在线上永远是空的。这条横幅的作用是：不让人把「空」误读成「没改过」。
+function gitBanner(g){
+  if(!g) return '';
+  if(!g.repo) return `<div class="iss warn">${esc(g.reason||'agents/ 不是 git 工作副本')}
+    改动只活在这台机器的磁盘上：没有历史、没法回滚，下次 rsync 部署会把它盖掉。
+    先用下面的「导出」把改动带回本地提交；根治办法见 TASKS.md「后台落盘留痕」那条。</div>`;
+  if(!g.auto_commit) return `<div class="iss warn">${esc(g.reason||'')}</div>`;
+  return `<div class="iss ok">agents/ 是 git 工作副本，且开了自动提交：后台每次保存会顺手提交一笔。</div>`;
 }
 
 function issuesHtml(iss){
@@ -200,7 +321,8 @@ function renderEditor(){
   $('#btnSave').onclick = async () => {
     try{
       const d = await api('/'+CUR.id+'/layer/'+TAB, {method:'PUT', body: JSON.stringify({text: DIRTY[TAB], bump: $('#bump').value})});
-      delete DIRTY[TAB]; CUR = d; render(); loadList(); toast('已写入 '+TAB+' · v'+d.version);
+      delete DIRTY[TAB]; CUR = d; await loadShells(); render(); loadList();
+      toast('已写入 '+TAB+' · v'+d.version+commitNote(d));
     }catch(e){ toast('保存失败：'+e.message); }
   };
 }
@@ -275,7 +397,7 @@ $('#formNew').onsubmit = async (e) => {
   catch(err){ toast('创建失败：'+err.message); e.preventDefault(); }
 };
 
-(async () => { DICT = await api('/dict'); await loadList(); })().catch(e => { $('#main').innerHTML = `<div class="iss">${esc(e.message)}</div>`; });
+(async () => { DICT = await api('/dict'); await loadShells(); await loadList(); })().catch(e => { $('#main').innerHTML = `<div class="iss">${esc(e.message)}</div>`; });
 </script>
 </body>
 </html>

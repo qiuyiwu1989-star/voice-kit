@@ -57,6 +57,19 @@ MODELS: Dict[str, dict] = {
 }
 DEFAULT_MODEL = "deepseek-v4-flash"
 
+# 壳标识：宿主产品（AI 教练）的 slug，会进 URL，所以跟 agent id 一个形状。
+SHELL_RE = re.compile(r"[a-z][a-z0-9-]{1,60}")
+
+# 档位 → 「产品红线套件」（入职第三关）。这张表就是第三关能不能自动跑的答案：
+# 表里没有的档位 = 这一关还没有跑器，后台必须显示「还没做」。
+# 故意不给 child_parent / adult_basic 随便指一个套件——凑满格比空着更坏。
+RAILS_SUITE: Dict[str, str] = {
+    "child_strict": "qiuqiu_8rules",
+    "listener_forbidden": "listener_describe_only",
+    "no_scoring": "coach_no_scoring",
+}
+GATE_SUITE = "gate_contract"        # 第二关：闸门契约，任何租户都得过
+
 RAILS: Dict[str, dict] = {
     "child_strict": {"audience": "child", "desc": "8 铁律 · 病理化词 · 自伤接管"},
     "child_parent": {"audience": "parent", "desc": "不病理化 · 不下诊断 · 引用原话只能是精选正向证据 · 必须标明数字分身"},
@@ -237,7 +250,28 @@ def load_all(root: Path) -> List[Agent]:
 
 # ---------------------------------------------------------------- 第一关：静态审查
 
-def validate(ag: Agent, *, author_level: str = "L0") -> List[Issue]:
+def shell_owners(ags: List[Agent]) -> Dict[str, List[str]]:
+    """壳 → 认领它的 agent id 列表。正常每个壳只有一个；有两个就是冲突。"""
+    out: Dict[str, List[str]] = {}
+    for a in ags:
+        for sh in a.summary()["shells"]:
+            out.setdefault(str(sh), []).append(a.id)
+    return out
+
+
+def other_shell_owners(root: Path, exclude_id: str) -> Dict[str, str]:
+    """除了 exclude_id 之外，磁盘上每个壳归谁。validate 拿它判「已被别人认领」。"""
+    out: Dict[str, str] = {}
+    for a in load_all(root):
+        if a.id == exclude_id:
+            continue
+        for sh in a.summary()["shells"]:
+            out.setdefault(str(sh), a.id)
+    return out
+
+
+def validate(ag: Agent, *, author_level: str = "L0",
+             other_shells: Optional[Dict[str, str]] = None) -> List[Issue]:
     out: List[Issue] = list(ag.parse_errors)
     for m in ag.missing:
         out.append(Issue(m, "缺这一层的文件"))
@@ -289,8 +323,25 @@ def validate(ag: Agent, *, author_level: str = "L0") -> List[Issue]:
 
     if m.get("run") not in (None, "local", "upstream"):
         out.append(Issue("manifest.yaml", "run 只能是 local / upstream（不填 = 代码级走上游）"))
-    if m.get("shells") is not None and not isinstance(m.get("shells"), list):
+    # 壳绑定。以前只有 tests/test_agent_chat.py 断言「一个壳不能被两个 agent 认领」——
+    # 那条断言只在本地跑测试时才生效，后台改 manifest 是绕过它的。提升成校验规则：
+    # 撞了壳，REP 那边把 slug 解析成哪个 agent 是随机的（谁先被 iterdir 到算谁），
+    # 用户会看到「点开还是那个教练，但人设变了」这种没法复现的 bug。
+    shells = m.get("shells")
+    if shells is not None and not isinstance(shells, list):
         out.append(Issue("manifest.yaml", "shells 要是一个列表（宿主产品的壳标识）"))
+    elif shells:
+        seen = set()
+        for sh in shells:
+            if not isinstance(sh, str) or not SHELL_RE.fullmatch(sh):
+                out.append(Issue("manifest.yaml", f"壳标识 {sh!r} 不合法：小写字母开头，只能小写字母/数字/连字符"))
+                continue
+            if sh in seen:
+                out.append(Issue("manifest.yaml", f"壳 {sh} 在自己的 shells 里重复了"))
+            seen.add(sh)
+            owner = (other_shells or {}).get(sh)
+            if owner:
+                out.append(Issue("manifest.yaml", f"壳 {sh} 已被 {owner} 认领——一个壳只能归一个 agent"))
     if m.get("mode") not in (None, "video", "voice", "text"):
         out.append(Issue("manifest.yaml", "mode 只能是 video / voice / text"))
 
@@ -468,12 +519,17 @@ def sessions(root: Path, agent_id: str, n: int = 50) -> List[dict]:
     return out
 
 
+def latest_reports(root: Path, agent_id: str) -> Dict[str, dict]:
+    """每套用例最新的一份报告。"""
+    latest: Dict[str, dict] = {}
+    for r in reports(root, agent_id):
+        latest.setdefault(str(r.get("suite") or ""), r)
+    return latest
+
+
 def scorecard(root: Path, ag: Agent) -> dict:
-    """评估卡。守线和快从 reports 来；准和被用要接埋点，这里先留空位。"""
-    reps = reports(root, ag.id)
-    latest = {}
-    for r in reps:
-        latest.setdefault(r.get("suite"), r)         # 按套件取最新一份
+    """评估卡。守线和快从 reports 来；准是「判断证据」不是分数；被用从 sessions 来。"""
+    latest = latest_reports(root, ag.id)
     guard = [r for r in latest.values() if r.get("n")]
     n = sum(r["n"] for r in guard); nf = sum(r.get("n_fail", 0) for r in guard)
     p50 = [r["first_token"]["p50"] for r in guard if r.get("first_token")]
@@ -483,8 +539,186 @@ def scorecard(root: Path, ag: Agent) -> dict:
         "guard": {"pass_rate": (round((n - nf) / n * 100, 1) if n else None), "n": n, "fail": nf,
                   "suites": sorted(latest)},
         "speed": {"p50": (max(p50) if p50 else None), "p90": (max(p90) if p90 else None)},
-        "accuracy": None,       # 判断测试，未接
+        "accuracy": accuracy(root, ag),
         "usage": _usage(root, ag.id),
+    }
+
+
+# ---------------------------------------------------------------- 「准」：判断证据，不是分数
+
+def recaps(root: Path, agent_id: str, n: int = 5, *, chars: int = 1200) -> List[dict]:
+    """最近 n 场的回顾原文（截断到 chars）。
+
+    为什么是「回顾」不是「原话」：回顾是 agent 自己用方法论产出的判断，
+    看它就能看出它在按自己的坐标系判断，还是在说放之四海皆准的套话。
+    这里不展示孩子的逐句原话（CLAUDE.md 红线）——`turns` 一个字都不进来。
+    后台本身还有 ADMIN_TOKEN 这道门，用途限安全审核 / 质量监控。
+    """
+    d = Path(root) / agent_id / "sessions"
+    if not d.is_dir():
+        return []
+    out = []
+    for p in sorted(d.glob("*.json"), reverse=True)[:n]:
+        try:
+            r = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        review = (r.get("review") or "").strip()
+        if not review:
+            continue
+        out.append({"at": r.get("at"), "version": r.get("version"), "model": r.get("model"),
+                    "user_turns": sum(1 for t in (r.get("turns") or []) if t.get("role") != "bot"),
+                    "review": review[:chars], "truncated": len(review) > chars})
+    return out
+
+
+def accuracy(root: Path, ag: Agent) -> dict:
+    """「准」这一栏。**故意没有分数**——判断测试（同一份对话喂两个 agent 比差异）
+    的跑器还没写（TASKS.md / spec 014 §10.5）。编一个数出来比空着更坏：
+    它会让人以为这一栏验过了。
+
+    能摆出来的是两样可核对的东西：
+      · 它 lens.yaml 里 write.judgments 声明的维度（它说自己按什么坐标系判断）
+      · 最近几场的回顾原文（它实际判断出了什么）
+    人对着这两样自己看：是在按方法论判断，还是在说套话。
+    """
+    dims = list(((ag.lens.get("write") or {}).get("judgments")) or [])
+    rs = recaps(root, ag.id)
+    return {
+        "score": None,                      # 判断测试跑器未实现，永远是 None
+        "status": "not_implemented",
+        "why": "判断测试跑器还没写：需要同一份对话喂给两个 agent、比较产出判断的差异。",
+        "dims": dims,
+        "recaps": rs,
+        "n_recaps": len(rs),
+    }
+
+
+# ---------------------------------------------------------------- 入职四关（spec 014）
+
+# 状态只有四种，含义写死在这里，别在前端另外发明：
+#   pass    这一关在当前版本上过了
+#   fail    跑了，没过
+#   todo    有跑器，但当前版本还没跑过（包括「跑过但那是旧版本」）
+#   missing 跑器/套件还不存在——**这一关还没做**，不是通过
+GATE_STATUS = ("pass", "fail", "todo", "missing")
+
+
+def onboarding(root: Path, ag: Agent, *, issues: Optional[List[Issue]] = None) -> List[dict]:
+    """入职四关的清单。
+
+    死规矩：没实现的关卡显示 missing，绝不允许因为「没人拦」就算它过。
+    第 2、3 关看的是 reports/ 里最新那份报告，并且**报告的版本要等于当前版本**——
+    在 v1.0.0 上跑绿了、然后把 playbook 改了升到 v1.1.0，那一关就回到 todo。
+    """
+    if issues is None:
+        issues = validate(ag)
+    latest = latest_reports(root, ag.id)
+
+    def from_suite(suite: Optional[str], name: str, why_missing: str) -> dict:
+        if not suite:
+            return {"name": name, "status": "missing", "suite": None, "detail": why_missing}
+        rep = latest.get(suite)
+        if not rep:
+            return {"name": name, "status": "todo", "suite": suite,
+                    "detail": f"套件 {suite} 存在，但这个 agent 还没跑过。"}
+        rv = str(rep.get("version") or "")
+        if rv and rv != ag.version:
+            return {"name": name, "status": "todo", "suite": suite,
+                    "detail": f"上次跑的是 v{rv}，当前是 v{ag.version}——改过之后没重跑。",
+                    "at": rep.get("at")}
+        ok = bool(rep.get("ok"))
+        return {"name": name, "status": "pass" if ok else "fail", "suite": suite,
+                "detail": (f"{rep.get('n')} 条全过" if ok else f"{rep.get('n_fail')} / {rep.get('n')} 条失败"),
+                "at": rep.get("at")}
+
+    n_fail = sum(1 for i in issues if i.severity == "fail")
+    n_warn = sum(1 for i in issues if i.severity == "warn")
+    gates = [{
+        "key": "static",
+        "name": "第一关 · 静态审查",
+        "status": "fail" if n_fail else "pass",
+        "detail": (f"{n_fail} 处不过" + (f"、{n_warn} 条警告" if n_warn else "")) if n_fail
+                  else ("没有问题" + (f"（{n_warn} 条警告）" if n_warn else "")),
+        "how": "后台自动，秒级，不调模型。",
+    }]
+    g2 = from_suite(GATE_SUITE, "第二关 · 闸门契约", "")
+    g2.update({"key": "gate", "how": f"在「跑一套用例」里选 {GATE_SUITE}，要打真模型。"})
+    gates.append(g2)
+
+    suite3 = RAILS_SUITE.get(ag.rails)
+    g3 = from_suite(suite3, "第三关 · 产品红线套件",
+                    f"档位 {ag.rails or '（未填）'} 还没有对应的红线套件——这一关还没做。"
+                    f"有套件的档位：{'、'.join(sorted(RAILS_SUITE))}。")
+    g3.update({"key": "redline",
+               "how": (f"在「跑一套用例」里选 {suite3}。" if suite3 else "先给这个档位写一套用例。")})
+    gates.append(g3)
+
+    acc = accuracy(root, ag)
+    gates.append({
+        "key": "judgment",
+        "name": "第四关 · 判断测试",
+        "status": "missing",            # 跑器不存在。这里写死，别让它有机会变成 pass
+        "suite": None,
+        "detail": acc["why"] + (f"（现在只能人看：{acc['n_recaps']} 场回顾、"
+                                f"声明了 {len(acc['dims'])} 个判断维度）"),
+        "how": "要实现：同一份对话喂给两个 agent，比较产出的判断差异。跑器没写，这一关一律算没做。",
+    })
+    return gates
+
+
+def onboarding_summary(gates: List[dict]) -> dict:
+    c = {s: 0 for s in GATE_STATUS}
+    for g in gates:
+        c[g["status"]] = c.get(g["status"], 0) + 1
+    return {"passed": c["pass"], "total": len(gates), **c}
+
+
+# ---------------------------------------------------------------- 壳绑定（后台可改）
+
+def save_shells(root: Path, agent_id: str, shells: List[str]) -> dict:
+    """把 shells 写回 manifest.yaml。冲突在这里挡一次——前端可以绕，接口不能。
+
+    不升版本：壳绑定是部署关系，不是人设内容，跟「措辞改了要 patch」不是一回事。
+    """
+    root = Path(root)
+    d = root / agent_id
+    mp = d / "manifest.yaml"
+    if not mp.exists():
+        raise FileNotFoundError(agent_id)
+    clean: List[str] = []
+    for sh in shells:
+        sh = str(sh).strip()
+        if not sh:
+            continue
+        if not SHELL_RE.fullmatch(sh):
+            raise ValueError(f"壳标识 {sh!r} 不合法：小写字母开头，只能小写字母/数字/连字符")
+        if sh in clean:
+            raise ValueError(f"壳 {sh} 重复了")
+        clean.append(sh)
+    owners = other_shell_owners(root, agent_id)
+    for sh in clean:
+        if sh in owners:
+            raise ValueError(f"壳 {sh} 已被 {owners[sh]} 认领——一个壳只能归一个 agent")
+    m = yaml.safe_load(mp.read_text(encoding="utf-8")) or {}
+    if clean:
+        m["shells"] = clean
+    else:
+        m.pop("shells", None)
+    m["updated_at"] = datetime.now().strftime("%Y-%m-%d")
+    mp.write_text(yaml.safe_dump(m, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"shells": clean}
+
+
+def shell_map(root: Path) -> dict:
+    """全库的壳 → agent。冲突单独列出来，页面上要能一眼看见撞了没有。"""
+    ags = load_all(root)
+    owners = shell_owners(ags)
+    return {
+        "bindings": [{"shell": sh, "agents": ids, "conflict": len(ids) > 1}
+                     for sh, ids in sorted(owners.items())],
+        "conflicts": sorted(sh for sh, ids in owners.items() if len(ids) > 1),
+        "unbound": sorted(a.id for a in ags if not a.summary()["shells"]),
     }
 
 
@@ -498,3 +732,99 @@ def _usage(root: Path, agent_id: str) -> Optional[dict]:
     return {"sessions": len(ss), "avg_user_turns": round(sum(user_turns) / len(ss), 1),
             "p50_first_ms": (firsts[len(firsts) // 2] if firsts else None),
             "last_at": ss[0]["at"]}
+
+
+# ---------------------------------------------------------------- 落盘留痕：git 或导出
+
+# 背景（TASKS.md 2026-09-14 部署记录）：服务器上 `/opt/voicekit-svc/agents/` 是 rsync 拷过去的，
+# **不是 git 工作副本**。后果：后台「历史」一栏在线上永远是空的，改错了没法回滚，
+# 而且下一次 rsync 部署会把线上改的悄悄盖掉——改动连存在过的痕迹都没有。
+#
+# 两条路，代码两条都给，部署时二选一（TASKS.md 末尾写了怎么选）：
+#   A. 服务器上把 agents/ 变成 git 工作副本 + 打开 VOICEKIT_AGENTS_GIT_COMMIT=1
+#      → 后台每次写盘顺手 commit 一笔，「历史」有了，回滚就是 git revert。
+#   B. 做不到 A（没装 git / 不想给服务进程 git 权限）时：后台提供「导出改动」，
+#      下载六层文件的 tar.gz 带回本地提交。**至少不让改动只活在那台机器上。**
+
+def git_env() -> bool:
+    """要不要在写盘后自动提交。默认关——不问自取地在别人机器上建提交是失礼的。"""
+    import os
+    return (os.environ.get("VOICEKIT_AGENTS_GIT_COMMIT") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def git_state(root: Path) -> dict:
+    """agents/ 到底是不是 git 工作副本。页面靠它决定说什么话，别猜。"""
+    root = Path(root)
+    state = {"repo": False, "auto_commit": git_env(), "reason": "", "toplevel": ""}
+    try:
+        r = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=str(root),
+                           capture_output=True, text=True, timeout=5)
+    except FileNotFoundError:
+        state["reason"] = "这台机器上没有 git。"
+        return state
+    except (OSError, subprocess.TimeoutExpired) as e:
+        state["reason"] = f"git 跑不起来：{e}"
+        return state
+    if r.returncode != 0:
+        state["reason"] = "agents/ 不在任何 git 仓库里——改动没有历史，也没法回滚。"
+        return state
+    state["repo"] = True
+    state["toplevel"] = r.stdout.strip()
+    if not state["auto_commit"]:
+        state["reason"] = "是 git 工作副本，但没开自动提交（VOICEKIT_AGENTS_GIT_COMMIT=1）：改完记得手工提交。"
+    return state
+
+
+def git_commit(root: Path, agent_id: str, message: str) -> dict:
+    """提交这一个 agent 目录。失败绝不抛——保存本身已经成功了，
+    提交不上只是「这次改动没留痕」，页面提示一句即可，不能把保存也拖失败。
+
+    `-c user.*` 是必须的：服务器上的服务账号多半没配 git 身份，
+    没有它 commit 会以 "empty ident" 失败，而且这个错只在生产才出现。
+    """
+    root = Path(root)
+    d = root / agent_id
+    ident = ["-c", "user.name=voice-kit admin", "-c", "user.email=admin@voice-kit.local"]
+    try:
+        add = subprocess.run(["git"] + ident + ["add", "--"] + [str(d / l) for l in LAYERS],
+                             cwd=str(root), capture_output=True, text=True, timeout=10)
+        if add.returncode != 0:
+            return {"ok": False, "reason": (add.stderr or add.stdout).strip()[:300]}
+        # 带路径提交：暂存区里别人放了什么都不关我事（CLAUDE.md 并行会话纪律，同一个病）
+        cm = subprocess.run(["git"] + ident + ["commit", "-m", message, "--"]
+                            + [str(d / l) for l in LAYERS],
+                            cwd=str(root), capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "reason": str(e)[:300]}
+    if cm.returncode != 0:
+        txt = (cm.stdout + cm.stderr).strip()
+        if "nothing to commit" in txt or "nothing added to commit" in txt or "no changes added" in txt:
+            return {"ok": True, "noop": True, "reason": "内容没变，没产生提交。"}
+        return {"ok": False, "reason": txt[:300]}
+    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=str(root),
+                          capture_output=True, text=True, timeout=5)
+    return {"ok": True, "hash": head.stdout.strip() if head.returncode == 0 else ""}
+
+
+def export_bundle(root: Path, agent_id: Optional[str] = None) -> bytes:
+    """把六层文件打成 tar.gz，供「导出改动」下载。
+
+    **只打六层文件**：sessions / reports / users 一个都不进包。
+    那三个是真人对话和抽出来的事实，.gitignore 挡着它们进库，
+    这里也一样挡——导出是给人带回去提交的，不是数据出口（CLAUDE.md 儿童数据红线）。
+    """
+    import io
+    import tarfile
+    root = Path(root)
+    ids = [agent_id] if agent_id else [a.id for a in load_all(root)]
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for aid in ids:
+            d = root / aid
+            if not d.is_dir():
+                raise FileNotFoundError(aid)
+            for layer in LAYERS:
+                p = d / layer
+                if p.exists():
+                    tf.add(str(p), arcname=f"agents/{aid}/{layer}")
+    return buf.getvalue()

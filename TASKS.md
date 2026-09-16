@@ -118,3 +118,66 @@
 
 计量计费、限流分级、管理后台。自用的几个项目，没有真实需求前那些是负担。
 `tenants.json` 留了 id，真需要时不用改结构。
+
+---
+
+## C 线 · Agent 后台管理（2026-09-16）
+
+- [x] **壳绑定可视化编辑**。`/admin/agents` 每个 agent 下面一节「壳绑定」，逗号/空格分隔直接改，
+      不用手写 YAML；旁边列出全库别的 agent 已认领的壳，撞没撞一眼看见。
+      **「一个壳只能归一个 agent」从测试断言提升成 `agents.validate` 的规则**——
+      以前那条只活在 `tests/test_agent_chat.py` 里，等于只在跑测试时生效，后台改 manifest 是绕过它的。
+      现在三处都挡：validate（草稿校验也看）、`save_shells`（接口层，前端绕不过）、页面（红标）。
+      撞壳返回 409 且不写盘。壳绑定不升版本——它是部署关系，不是人设内容。
+- [x] **入职四关可视化**（spec 014 §9/§10）。四关一个清单，状态只有四种且含义写死在
+      `agents.GATE_STATUS`：pass / fail / todo（有跑器没跑过，**或跑过但那是旧版本**）/
+      missing（跑器还不存在）。**missing 的 UI 文案是「还没做」，用灰白虚线，
+      没有任何近似绿色的颜色**——`test_admin_page_never_paints_unimplemented_as_pass` 守着这条口径。
+      第三关按 rails 找套件（`RAILS_SUITE`）：`child_parent` / `adult_basic` 没有对应套件，
+      所以那两个档位的 agent 第三关一律显示「还没做」，不凑满格。
+      第四关（判断测试）写死 missing，跑器不存在就没有变成 pass 的可能。
+- [x] **评估卡「准」那一栏**：不编分数。`accuracy().score` 永远是 None。
+      摆出来的是两样可核对的东西——它 `lens.yaml` 里 `write.judgments` **声明**的维度、
+      和它最近 5 场**实际**产出的回顾原文（新增「判断证据」一节）。人对着看：
+      是在按自己的方法论判断，还是在说套话。`recaps()` 只取 review，**逐句原话一个字不进**
+      （CLAUDE.md 儿童数据红线；后台本身还有 ADMIN_TOKEN 这道门，用途限安全审核 / 质量监控）。
+- [ ] **真正的判断测试跑器**（第四关，剩下的正事）：同一份对话喂给两个 agent，
+      比较产出判断的差异。差异应该出在判断维度上，不是语气上（spec 012 §5.1 / 014 §10.5）。
+      做完之后 `agents.onboarding` 里第四关那个写死的 `"status": "missing"` 才允许改。
+
+### 部署那一步要人做什么（第 4 条：服务器上 agents/ 不是 git 工作副本）
+
+代码两条路都给了，**部署的人二选一**。我没上服务器，下面是要在 146.56.239.22 上做的事：
+
+**A（推荐，能回滚）：把 `/opt/voicekit-svc/agents/` 变成 git 工作副本**
+
+    # 1. 先把 voice-kit 推上远端（现在还没有 remote，见「该收的尾」那条）
+    # 2. 服务器上：
+    cd /opt/voicekit-svc && sudo mv agents agents.bak-$(date +%s)
+    sudo git clone <远端> /opt/voicekit-svc/agents-repo
+    sudo cp -R agents.bak-*/. agents-repo/agents/      # 把线上现有人设并回去，逐个 diff
+    # agents/ 指到仓库里的 agents 子目录（或直接 clone 到 agents/）
+    sudo chown -R <服务账号> /opt/voicekit-svc/agents
+    # 3. /etc/voicekit-svc.env 加一行：
+    VOICEKIT_AGENTS_GIT_COMMIT=1
+    sudo systemctl restart voicekit-svc
+
+    之后后台每次保存会顺手 `git commit`（提交信息形如 `qiuqiu: 后台改 persona.md → v1.1.0`），
+    「历史」那一栏就有东西了，回滚 = `git revert`。
+    注意三点：
+      · `git_commit` 用 `-c user.name/user.email` 自带身份——服务账号没配 git 身份时
+        commit 会以 "empty ident" 失败，而这个错只在生产才出现。
+      · 提交是**带路径**的（`git commit -- <六层文件>`），只取那五个文件，
+        暂存区里有什么都不管（CLAUDE.md 并行会话纪律，同一个病）。
+        所以 `sessions/` `reports/` `users/` 不可能被这条路带进库。
+      · 提交失败**不影响保存**：文件已经写下去了，页面会把原因显示出来。
+
+**B（做不到 A 时的兜底）：用后台的「导出改动」**
+
+    后台「历史」那一节底下有两个链接：导出这个 agent / 导出全部，下载六层文件的 tar.gz。
+    带回本地解开、`git diff` 看一眼、提交。**只打六层文件**，真人对话不进包。
+    这条路不给回滚，只保证「改动不会只活在那台机器上、下次 rsync 被悄悄盖掉」。
+
+**在 A 落地之前，部署的人必须知道**：`rsync` 部署会覆盖服务器上后台改过的人设。
+每次部署前先在后台点「导出全部」存一份，或者认了——先做 A。
+页面上那条橙色横幅就是提醒这件事的，它靠 `git_state()` 判断，不是写死的文案。

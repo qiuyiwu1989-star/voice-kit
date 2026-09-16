@@ -339,7 +339,13 @@ def test_talk_and_me_pages_define_helpers_before_use():
 
 
 def test_shells_binding_is_declared_by_the_agent():
-    """壳 → agent 的绑定在人设库里，不在宿主产品的数据库里（spec 009 §4 改法）。"""
+    """壳 → agent 的绑定在人设库里，不在宿主产品的数据库里（spec 009 §4 改法）。
+
+    「一个壳只能归一个 agent」这条以前只在这里断言，等于只在跑测试时生效——
+    后台改 manifest 是绕过它的。2026-09-16 提升成 `agents.validate` 的一条规则
+    （见 test_agents_admin.py::test_shell_claimed_by_another_agent_is_a_fail）。
+    这里保留的是对**种子数据**的守卫：库里现在这几个 agent 没撞壳。
+    """
     red = A.load_agent(REPO / "agents" / "red-coach")
     assert red.summary()["shells"] == ["founder-pitch", "sarah-chen"]
     assert not [i for i in A.validate(red) if i.severity == "fail"]
@@ -370,3 +376,15 @@ def test_agents_list_accepts_ui_ticket(app, monkeypatch):
     assert r.status_code == 200
     ids = {a["id"] for a in r.json()["agents"]}
     assert "red-coach" in ids and "guwen-axun" in ids
+
+
+def test_voices_default_is_resolved_not_a_role_name(app, monkeypatch):
+    """manifest 的 voice 可以写角色名。**回给前端的必须是编号** ——
+    角色名匹配不上选择器里任何一项，于是显示一个、合成又用另一个（2026-09-16 踩到）。"""
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    c = TestClient(app, cookies={"vk_ui": "go"})
+    red = c.get("/v1/agents/red-coach/voices?lang=zh").json()
+    assert red["default"] == 602004                      # coach → 暖心阿灿
+    assert red["options"][0]["id"] == 602004             # 默认那个排最前
+    da = c.get("/v1/agents/chengjiao-dacheng/voices?lang=zh").json()
+    assert da["default"] == 603003                       # 本来就是编号，原样
