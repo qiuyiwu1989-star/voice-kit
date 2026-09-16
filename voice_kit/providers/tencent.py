@@ -113,8 +113,9 @@ class TencentProvider:
         if not audio or len(audio) < 200:
             return ASRResult(text="")
         t0 = time.perf_counter()
+        # engine 可按次覆盖：中文 16k_zh；英文/中英混说用 16k_zh-PY（AI 教练实测：一句话识别不接受 16k_zh_en，接受 16k_zh-PY）
         d = self._call("asr.tencentcloudapi.com", "asr", "SentenceRecognition", "2019-06-14", {
-            "EngSerViceType": self.asr_engine,
+            "EngSerViceType": kw.get("engine") or self.asr_engine,
             "SourceType": 1,
             "VoiceFormat": fmt,
             "Data": base64.b64encode(audio).decode(),
@@ -122,7 +123,7 @@ class TencentProvider:
             # 临时热词：云端不保留，词表跟着代码走（见 voice_kit/hotwords.py）
             **({"HotwordList": hotwords} if hotwords else {}),
         })
-        from .mimo import wav_duration_ms
+        from .wav import wav_duration_ms
         return ASRResult(text=(d.get("Result") or "").strip(),
                          duration_ms=wav_duration_ms(audio),
                          elapsed_ms=round((time.perf_counter() - t0) * 1000, 1),

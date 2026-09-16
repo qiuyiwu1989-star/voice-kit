@@ -51,17 +51,7 @@ def _dewav_chunk(chunk: bytes, is_first: bool) -> bytes:
     return bytes(header) + chunk[_WAV_HEADER_LEN:]
 
 
-def wav_duration_ms(audio: bytes) -> Optional[float]:
-    """从 WAV 头算真实时长。只记字节数不够——不同采样率算出来的秒数天差地别。"""
-    try:
-        if not _is_wav_chunk(audio):
-            return None
-        channels, rate = struct.unpack_from("<HI", audio, 22)
-        bits = struct.unpack_from("<H", audio, 34)[0]
-        per_sec = rate * channels * max(1, bits // 8)
-        return round((len(audio) - _WAV_HEADER_LEN) / per_sec * 1000, 1) if per_sec else None
-    except Exception:
-        return None
+from .wav import wav_duration_ms  # noqa: E402  —— 真源在 wav.py，别在这里再写一份
 
 
 def pcm16_to_wav(pcm: bytes, sample_rate: int = 16000, channels: int = 1) -> bytes:

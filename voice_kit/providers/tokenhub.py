@@ -40,6 +40,27 @@ DEFAULT_BASE_URL = "https://tokenhub.tencentmaas.com/v1"
 VOICE_FRIENDLY_MODELS = ("deepseek-v4-flash", "mimo-v2.5-pro")
 
 
+def _strip_think(text: str, in_think: bool):
+    """流式地剥掉 <think>…</think>。返回 (可见文本, 是否仍在 think 里)。"""
+    out = ""
+    while text:
+        if in_think:
+            j = text.find("</think>")
+            if j < 0:
+                return out, True
+            text = text[j + len("</think>"):]
+            in_think = False
+        else:
+            i = text.find("<think>")
+            if i < 0:
+                out += text
+                break
+            out += text[:i]
+            text = text[i + len("<think>"):]
+            in_think = True
+    return out, in_think
+
+
 @dataclass
 class LLMChunk:
     text: str
@@ -58,7 +79,8 @@ class TokenHubLLM:
     def __init__(self, api_key: str, *, model: str = "deepseek-v4-flash",
                  base_url: str = DEFAULT_BASE_URL, timeout: float = 90.0,
                  max_tokens: int = 1024, temperature: Optional[float] = None,
-                 thinking: bool = True):
+                 thinking: bool = True, auth_header: str = "bearer",
+                 thinking_field: bool = True, thinking_style: str = "thinking"):
         if not api_key:
             raise ValueError("TokenHubLLM 需要 api_key")
         self.api_key = api_key
@@ -67,6 +89,15 @@ class TokenHubLLM:
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.thinking = thinking
+        # OpenAI 兼容网关的两种认证写法：TokenHub 是 Bearer，小米 MiMo 是 `api-key` 头
+        self.auth_header = auth_header
+        # 有的网关不认 enable_thinking 字段（会 400）。关掉就不发。
+        self.thinking_field = thinking_field
+        # 关思考的写法（2026-09-14 对着 TokenHub「深度思考」文档核的）：
+        #   "thinking"        → 请求体 thinking={"type":"disabled"}，TokenHub 通用（hy/deepseek/glm-5.2/qwen）
+        #   "enable_thinking" → enable_thinking=False，DeepSeek 原生字段，别家不认
+        # GLM-5.3 / Kimi-K3 关不掉，只能 reasoning_effort=low；MiniMax 不在矩阵里且会把 <think> 混进正文。
+        self.thinking_style = thinking_style
         self._http = httpx.Client(timeout=httpx.Timeout(timeout, connect=10.0),
                                   limits=httpx.Limits(max_keepalive_connections=8,
                                                       max_connections=16))
@@ -122,14 +153,22 @@ class TokenHubLLM:
         }
         if cache_key:
             payload["prompt_cache_key"] = cache_key
-        if (self.thinking if thinking is None else thinking) is False:
-            payload["enable_thinking"] = False
+        if self.thinking_field and (self.thinking if thinking is None else thinking) is False:
+            if self.thinking_style == "enable_thinking":
+                payload["enable_thinking"] = False
+            else:
+                payload["thinking"] = {"type": "disabled"}
+        if kw.get("reasoning_effort"):
+            payload["reasoning_effort"] = kw["reasoning_effort"]
         if self.temperature is not None:
             payload["temperature"] = self.temperature
-        payload.update({k: v for k, v in kw.items() if k not in ("max_tokens",)})
+        payload.update({k: v for k, v in kw.items() if k not in ("max_tokens", "reasoning_effort")})
 
-        headers = {"Authorization": f"Bearer {self.api_key}",
-                   "Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json"}
+        if self.auth_header == "api-key":
+            headers["api-key"] = self.api_key
+        else:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         if session_id:
             headers["X-Session-ID"] = session_id
 
@@ -141,6 +180,7 @@ class TokenHubLLM:
         # 重试的边界很重要：**只在一个 token 都还没吐出去的时候重试**。
         # 已经吐过字再重来，孩子那边会听到同一句话说两遍。
         emitted = False
+        in_think = False
         for attempt in (1, 2):
             try:
                 with self._http.stream("POST", f"{self.base_url}/chat/completions",
@@ -160,6 +200,9 @@ class TokenHubLLM:
                             continue
                         delta = (obj.get("choices") or [{}])[0].get("delta", {})
                         text = delta.get("content") or ""
+                        # 有的模型（实测 minimax-m3）把 <think>…</think> 混在 content 里。
+                        # 语音里那段会被一字一句念出来，所以在这里剥掉，不指望上游守规矩。
+                        text, in_think = _strip_think(text, in_think)
                         if text:
                             emitted = True
                             yield text

@@ -82,7 +82,11 @@ def test_http_error_is_not_retried(monkeypatch):
 
 
 def test_thinking_off_sets_enable_thinking(monkeypatch):
-    """语音场景最大的杠杆：实测首字 3726→1387ms。这条钉住字段名别被改掉。"""
+    """语音场景最大的杠杆：实测首字 3726→1387ms。这条钉住字段名别被改掉。
+
+    2026-09-14 改：默认写法从 DeepSeek 专用的 `enable_thinking:false` 换成 TokenHub 通用的
+    `thinking:{type:disabled}`——实测对 DeepSeek 同样生效，而 GLM/混元/MiniMax 只认通用写法
+    （用旧写法它们照样思考，64 个 token 全被吃掉一个字没出）。旧写法保留为 thinking_style="enable_thinking"。"""
     llm = TokenHubLLM("k")
     seen = {}
 
@@ -93,7 +97,8 @@ def test_thinking_off_sets_enable_thinking(monkeypatch):
     monkeypatch.setattr(llm._http, "stream", fake_stream)
     list(llm.stream([{"role": "user", "content": "hi"}], thinking=False,
                     cache_key="child-1", session_id="s-1"))
-    assert seen["enable_thinking"] is False
+    assert seen["thinking"] == {"type": "disabled"}
+    assert "enable_thinking" not in seen
     assert seen["prompt_cache_key"] == "child-1"
     assert seen["_headers"]["X-Session-ID"] == "s-1"
 

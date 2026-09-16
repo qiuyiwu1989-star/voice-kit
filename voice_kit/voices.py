@@ -148,3 +148,34 @@ def role_options(role: str = "qiuqiu"):
     default = ROLE_DEFAULTS.get(role, FALLBACK_VOICE)
     ids = [default] + [i for i in QIUQIU_SHORTLIST if i != default]
     return [BY_ID[i] for i in ids if i in BY_ID]
+
+
+# ---------------------------------------------------------------- 英文（2026-09-14 用户要中英都能用）
+# 腾讯标准英文音色。超自然那批是中文模型，念英文会走调；中英混说时仍用中文音色（它们能读英文单词）。
+EN_VOICES = [
+    Voice(101050, "WeJack", "男", "精品", "英文男声"),
+    Voice(101051, "WeRose", "女", "精品", "英文女声"),
+]
+for _v in EN_VOICES:
+    BY_ID.setdefault(_v.id, _v)
+
+
+def options_for(lang: str = "zh", default=None):
+    """给用户端的音色候选：默认那个排最前，然后按语言给。lang: zh / en / mixed。"""
+    if lang == "en":
+        ids = [v.id for v in EN_VOICES]
+    else:
+        ids = list(QIUQIU_SHORTLIST) + [603003]
+    if default is not None:
+        try:
+            d = int(default)
+            ids = [d] + [i for i in ids if i != d]
+        except (TypeError, ValueError):
+            pass
+    out = []
+    for i in ids:
+        v = BY_ID.get(i)
+        if v:
+            out.append({"id": v.id, "name": v.name, "gender": v.gender, "tier": v.tier,
+                        "scene": v.scene, "lang": "en" if v in EN_VOICES else "zh"})
+    return out
