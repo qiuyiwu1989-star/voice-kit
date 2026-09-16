@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的记录</title>
+<style>
+:root{--bg:#000;--panel:#121214;--panel2:#1a1a1e;--ink:#F2F2F4;--ink2:#B8BAC2;--ink3:#7E818C;--line:#26272C;--acc:#D3245F}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px} h2{font-size:16px;margin:0 0 10px;color:var(--ink2)}
+.sub{color:var(--ink3);font-size:13px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(300px,2fr);gap:18px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border-radius:14px;padding:16px 18px;margin-bottom:18px}
+.s{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;align-items:start}
+.s:last-child{border-bottom:0}
+.s time{color:var(--ink3);font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.s b{color:var(--acc);font-weight:600}
+.s .r{color:var(--ink3);font-size:13px;white-space:pre-wrap}
+.f{display:flex;gap:10px;padding:6px 0;font-size:14px;align-items:baseline}
+.f .cat{font-size:11px;color:var(--ink3);border:1px solid var(--line);border-radius:999px;padding:0 7px;white-space:nowrap}
+.f .q{color:var(--ink3);font-size:12.5px}
+.f .seen{color:var(--ink3);font-size:12px;margin-left:auto;white-space:nowrap}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+select,input,button{font:inherit;font-size:14px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff;cursor:pointer}
+button:disabled{opacity:.5}
+.rv{white-space:pre-wrap;line-height:1.7;font-size:15px}
+.rv.meta{color:var(--ink3);font-size:12.5px;white-space:normal;margin-bottom:8px}
+.hint{color:var(--ink3);font-size:13px}
+label.ck{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>我的记录</h1>
+  <div class="sub"><span id="who">…</span> · <a href="/talk" style="color:var(--ink3)">回去聊 ↗</a></div>
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>综合复盘</h2>
+        <div class="bar">
+          <select id="method"><option value="timeline">按时间看变化</option><option value="themes">按主题归纳</option><option value="agent">用某个 agent 的方法论</option></select>
+          <select id="agentSel" hidden></select>
+          <label class="ck"><input type="checkbox" id="onlyAgent"> 只看该 agent 的场次</label>
+          <button class="p" id="btnRun">复盘最近 <span id="nSel">0</span> 场</button>
+        </div>
+        <div id="rvOut" class="hint">选场次（右边打勾），选方法，点复盘。</div>
+      </div>
+      <div class="panel"><h2>过去的综合复盘</h2><div id="reviews" class="hint">还没有。</div></div>
+    </div>
+    <div>
+      <div class="panel"><h2>场次 <span class="hint" id="nAll"></span></h2><div id="sessions" class="hint">…</div></div>
+      <div class="panel"><h2>记住的事实 <span class="hint">（平台抽的，agent 中立）</span></h2><div id="facts" class="hint">…</div></div>
+    </div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CAT = {event:'事', preference:'好恶', constraint:'约束', relation:'关系', attempt:'试过'};
+let uid = '';
+try{ for(const k of Object.keys(localStorage)){ if(k.startsWith('talk-pref-')){ const p = JSON.parse(localStorage.getItem(k)||'{}'); if(p.uid){ uid = p.uid; break; } } } }catch(e){}
+uid = new URLSearchParams(location.search).get('u') || uid;
+const H = () => ({'X-User-Id': encodeURIComponent(uid)});
+let DATA = null;
+async function load(){
+  if(!uid){ $('#who').textContent = '还没告诉我你是谁：回到对话页，在「我是」里填个名字。'; return; }
+  $('#who').textContent = uid;
+  const r = await fetch('/v1/users/me/memory', {headers: H()}); if(!r.ok){ $('#who').textContent = '读不到：' + r.status; return; }
+  DATA = await r.json();
+  $('#nAll').textContent = DATA.sessions.length + ' 场';
+  $('#sessions').innerHTML = DATA.sessions.length ? DATA.sessions.map((s, i) => `<div class="s"><label class="ck"><input type="checkbox" class="pick" data-i="${i}" ${i < 5 ? 'checked' : ''}><time>${esc((s.at||'').slice(0,16).replace('T',' '))}</time></label><div><b>${esc(s.agent_name||s.agent)}</b> · ${s.user_turns} 个来回<div class="r">${esc(s.opening)}</div>${s.review ? `<div class="r">回顾：${esc(s.review)}</div>` : ''}</div></div>`).join('') : '还没有场次。';
+  $('#facts').innerHTML = DATA.facts.length ? DATA.facts.map(f => `<div class="f"><span class="cat">${esc(CAT[f.category]||f.category)}</span><span>${esc(f.content)}${f.quote ? ` <span class="q">「${esc(f.quote)}」</span>` : ''}</span><span class="seen">${f.seen > 1 ? '说过 ' + f.seen + ' 次' : ''}</span></div>`).join('') : '还没抽到事实。';
+  const agents = [...new Set(DATA.sessions.map(s => s.agent))];
+  $('#agentSel').innerHTML = agents.map(a => `<option value="${esc(a)}">${esc((DATA.sessions.find(s => s.agent === a) || {}).agent_name || a)}</option>`).join('');
+  $('#reviews').innerHTML = DATA.reviews.length ? DATA.reviews.map(r => `<div class="rv meta">${esc((r.at||'').slice(0,16).replace('T',' '))} · ${esc(r.method_label||r.method)} · ${(r.session_ids||[]).length} 场</div><div class="rv">${esc(r.text)}</div><hr style="border:0;border-top:1px solid var(--line);margin:12px 0">`).join('') : '还没有。';
+  countSel();
+  document.querySelectorAll('.pick').forEach(c => c.onchange = countSel);
+}
+function picked(){ return [...document.querySelectorAll('.pick:checked')].map(c => DATA.sessions[+c.dataset.i]); }
+function countSel(){ $('#nSel').textContent = picked().length; }
+$('#method').onchange = () => { $('#agentSel').hidden = $('#method').value !== 'agent'; };
+$('#onlyAgent').onchange = () => { const a = $('#agentSel').value; document.querySelectorAll('.pick').forEach(c => { const s = DATA.sessions[+c.dataset.i]; c.checked = $('#onlyAgent').checked ? s.agent === a : true; }); countSel(); };
+$('#btnRun').onclick = async () => {
+  const ps = picked(); if(!ps.length) return;
+  $('#btnRun').disabled = true; $('#rvOut').textContent = '在想……几场一起看要十几秒。';
+  try{
+    const r = await fetch('/v1/users/me/review', {method:'POST', headers:{'Content-Type':'application/json', ...H()},
+      body: JSON.stringify({method: $('#method').value, agent: $('#agentSel').value, session_ids: ps.map(s => s.session_id)})});
+    const d = await r.json();
+    $('#rvOut').innerHTML = r.ok ? `<div class="rv">${esc(d.text)}</div>` : `<div class="hint">失败：${esc(d.detail||r.status)}</div>`;
+    if(r.ok) load();
+  }catch(e){ $('#rvOut').textContent = '失败：' + e.message; }
+  finally{ $('#btnRun').disabled = false; }
+};
+load();
+</script>
+</body>
+</html>

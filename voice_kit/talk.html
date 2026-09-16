@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>__SHORT__ · 通话</title>
+<style>
+:root{--bg:#000;--panel:#121214;--panel2:#1a1a1e;--ink:#F2F2F4;--ink2:#B8BAC2;--ink3:#7E818C;--line:#26272C;--acc:#D3245F;--accbg:#2B1119;--ok:#2A9D5C;--warn:#E3B45B;--bad:#E38484}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,"PingFang SC","Hiragino Sans GB",sans-serif;display:flex;flex-direction:column;align-items:center}
+.stage{width:min(100%,1440px);padding:20px 16px 24px;display:flex;flex-direction:column;gap:16px;flex:1;min-height:0}
+.split{display:grid;grid-template-columns:minmax(0,7fr) minmax(340px,5fr);gap:18px;flex:1;min-height:0;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+.left{display:flex;flex-direction:column;gap:14px;min-width:0}
+.video{position:relative;aspect-ratio:16/9;background:#0b0b0d;border-radius:18px;overflow:hidden}
+.video video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#0b0b0d}
+.video .badge{position:absolute;left:18px;top:18px;background:rgba(40,40,44,.85);color:#ddd;font-size:14px;padding:6px 14px;border-radius:20px;display:flex;align-items:center;gap:8px}
+.video .badge i{width:9px;height:9px;border-radius:50%;background:#888;display:inline-block}
+.video .badge.rec i{background:var(--acc);animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.3}}
+.video .off[hidden]{display:none}
+.video[hidden]{display:none}
+.video .off{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:15px;flex-direction:column;gap:10px}
+.video .off button{font:inherit;background:#222;border:1px solid #333;color:#ddd;border-radius:20px;padding:8px 16px;cursor:pointer}
+.card{display:flex;align-items:center;gap:14px;background:var(--panel);border-radius:14px;padding:12px 16px}
+.av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex:none;color:#fff;background:var(--acc)}
+.av.me{background:#3a3d46;color:#ddd}
+.card .who b{display:block;font-size:17px;line-height:1.3}
+.card .who small{color:var(--ink3);font-size:13px}
+.card .state{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--ink3);font-size:14px;white-space:nowrap}
+.card .state i{width:9px;height:9px;border-radius:50%;background:#555;display:inline-block}
+.card .state.listen i{background:var(--ok);box-shadow:0 0 0 4px rgba(42,157,92,.2)}
+.card .state.think i{background:var(--warn)}
+.card .state.speak i{background:var(--acc);animation:blink 1s infinite}
+.card .state.hold i{background:#4a90e2}
+.ctl{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.r{width:56px;height:56px;border-radius:50%;background:var(--acc);color:#fff;font-weight:700;font-size:22px;display:flex;align-items:center;justify-content:center;border:0;cursor:pointer;flex:none}
+.r.listen{box-shadow:0 0 0 8px rgba(211,36,95,.22)}
+.r.off{background:#333}
+.live{color:var(--ink3);font-size:15px;min-width:8em}
+.end{font:inherit;font-size:18px;font-weight:700;background:var(--acc);color:#fff;border:0;border-radius:40px;padding:14px 32px;cursor:pointer;margin-left:auto}
+.end:disabled{opacity:.5;cursor:default}
+.hold{font:inherit;font-size:14px;background:var(--panel2);color:var(--ink2);border:1px solid var(--line);border-radius:20px;padding:9px 14px;cursor:pointer}
+.hold.on{background:#16304a;border-color:#2b5a8a;color:#cfe3ff}
+.hold.stop{background:#3a1420;border-color:#7a2340;color:#ffd0dc}
+.hold[hidden]{display:none}
+.stats{display:flex;gap:16px;flex-wrap:wrap;color:var(--ink3);font-size:12.5px;padding:0 4px}
+.stats b{color:var(--ink2);font-weight:500;font-variant-numeric:tabular-nums}
+.right{display:flex;flex-direction:column;gap:10px;min-height:0;min-width:0}
+.transcript{background:var(--panel);border-radius:14px;padding:14px 16px;min-height:260px;max-height:calc(100vh - 240px);overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+@media (max-width:900px){.transcript{max-height:42vh;min-height:180px}}
+.t{display:grid;grid-template-columns:32px 1fr;gap:10px;align-items:start}
+.t .av{width:30px;height:30px;font-size:13px;margin-top:2px}
+.t .body .name{display:flex;gap:8px;align-items:baseline;font-size:13px;color:var(--ink3);line-height:1.2;margin-bottom:2px}
+.t .body .name b{color:var(--ink2);font-weight:600}
+.t.bot .body .name b{color:var(--acc)}
+.t .tx{font-size:15.5px;line-height:1.55;white-space:pre-wrap}
+.t .interim{color:var(--ink3)}
+.t.err .tx{color:var(--bad);font-size:14px}
+.hint{color:var(--ink3);font-size:14px;text-align:center;margin:auto}
+form.txt{display:flex;gap:8px}
+form.txt input{flex:1;font:inherit;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:22px;padding:10px 16px;min-width:0}
+form.txt button{font:inherit;background:#222;color:#ddd;border:1px solid #333;border-radius:20px;padding:9px 16px;cursor:pointer}
+.opts{display:flex;gap:12px;font-size:12px;color:var(--ink3);flex-wrap:wrap;padding:0 4px}
+.opts label{display:flex;gap:4px;align-items:center;cursor:pointer}
+.opts select{font:inherit;font-size:12px;background:var(--panel2);color:var(--ink2);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+.review{background:var(--panel);border-radius:14px;padding:22px 26px;display:none}
+.review h2{margin:0 0 6px;font-size:20px}
+.review .meta{color:var(--ink3);font-size:13px;margin-bottom:14px}
+.review .body{white-space:pre-wrap;font-size:16px;line-height:1.7}
+.review .acts{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.review .acts a{font:inherit;font-size:14px;background:#222;color:#ddd;border:1px solid #333;border-radius:20px;padding:8px 16px;text-decoration:none}
+.tip{color:var(--ink3);font-size:12.5px;padding:0 4px;min-height:1.4em}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="split">
+    <div class="left">
+      <div class="video">
+        <video id="cam" autoplay muted playsinline></video>
+        <div class="badge" id="badge"><i></i><span>准备中</span></div>
+        <div class="off" id="camOff" hidden><span>摄像头没开</span><button id="btnCam">打开摄像头</button></div>
+      </div>
+      <div class="card">
+        <div class="av">__INITIAL__</div>
+        <div class="who"><b>__SHORT__</b><small>__BLURB__</small></div>
+        <div class="state" id="st"><i></i><span>准备好了</span></div>
+      </div>
+      <div class="ctl">
+        <button class="r off" id="mic" title="开始 / 暂停听">🎙</button>
+        <span class="live" id="live">点一下开始</span>
+        <button class="hold" id="btnHold" title="它只听不回，直到你说「我说完了」或停够 4 秒">听我讲完</button>
+        <button class="hold stop" id="btnStop" hidden title="它说话或在想的时候，点这里或点麦克风都能打断">✋ 打断</button>
+        <button class="end" id="end" disabled>结束并回顾</button>
+      </div>
+      <div class="stats"><span>时长 <b id="sDur">0:00</b></span><span>来回 <b id="sTurns">0</b></span><span>识别 <b id="sAsr">—</b></span><span>首字 <b id="sFirst">—</b></span><span>出声 <b id="sSound">—</b></span></div>
+      <div class="tip" id="tip"></div>
+    </div>
+    <div class="right">
+      <div class="transcript" id="log"><p class="hint" id="hint">点麦克风开始。你说话它听，停一下它就接；它说话时你开口，它会停。想一口气讲完就点「听我讲完」，或者直接说「你别插嘴」。</p></div>
+      <form class="txt" id="f"><input id="txt" placeholder="打字也行……" autocomplete="off"><button type="submit">发送</button></form>
+      <div class="opts">
+        <label>模式 <select id="mode"><option value="video">视频</option><option value="voice">仅语音</option><option value="text">文字</option></select></label>
+        <label>我是 <input id="uid" placeholder="名字，用来记住你" style="width:8em;font:inherit;font-size:12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 6px"></label>
+        <a id="meLink" href="/me" style="color:var(--ink3)">我的记录 ↗</a>
+        <label>语言 <select id="lang"><option value="zh">中文</option><option value="en">English</option><option value="mixed">中英混说</option></select></label>
+        <label>音色 <select id="voiceSel"><option value="">默认</option></select></label>
+        <label><input type="checkbox" id="optTts" checked> 朗读</label>
+        <label><input type="checkbox" id="optBarge" checked> 我一开口它就闭嘴</label>
+        <label><input type="checkbox" id="optRec" checked> 录像（本机）</label>
+        <label title="服务器嗓子出错时才需要"><input type="checkbox" id="optBrowserTts"> 用浏览器嗓子</label>
+      </div>
+    </div>
+  </div>
+  <div class="review" id="review"></div>
+</div>
+<script type="module">
+import { createRecorder, recorderSupported } from "/talk/lib/recorder.js";
+import { createSpeechQueue, pcm16PostFetcher, speechSupported } from "/talk/lib/speechQueue.js";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const AGENT = '__AGENT__', NAME = '__SHORT__', DEFAULT_VOICE = '__VOICE__', INITIAL = '__INITIAL__';
+const PREF_KEY = 'talk-pref-' + AGENT;
+let pref = {lang: 'zh', voice: '', mode: '__MODE__' || 'video', uid: ''}; try{ pref = {...pref, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}')}; }catch(e){}
+const savePref = () => { try{ localStorage.setItem(PREF_KEY, JSON.stringify(pref)); }catch(e){} };
+const curVoice = () => pref.voice || DEFAULT_VOICE;
+const curLang = () => pref.lang || 'zh';
+const curMode = () => pref.mode || 'video';
+const curUid = () => (pref.uid || '').trim();
+const uidHeaders = () => curUid() ? {'X-User-Id': encodeURIComponent(curUid())} : {};
+function applyMode(){
+  const m = curMode(); $('#mode').value = m;
+  $('#cam').parentElement.hidden = (m !== 'video');
+  $('#mic').style.display = (m === 'text') ? 'none' : '';
+  $('#btnHold').style.display = (m === 'text') ? 'none' : '';
+  if(m === 'text') setState('', '打字模式');
+}
+$('#mode').onchange = () => { pref.mode = $('#mode').value; savePref(); applyMode(); if(pref.mode === 'video') openCam(); };
+$('#uid').value = pref.uid || ''; $('#uid').onchange = () => { pref.uid = $('#uid').value.trim(); savePref(); };
+const SESSION = 'talk-' + AGENT + '-' + Math.random().toString(36).slice(2, 8);
+const messages = [], turns = [];
+let t0 = null, listening = false, speaking = false, busy = false, stoppedByUser = true, ended = false;
+
+// ---------------------------------------------------------------- 时钟、字幕、状态
+const clock = () => { if(t0 === null) return '0:00'; const s = Math.floor((Date.now() - t0) / 1000); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
+setInterval(() => { if(t0 !== null && !ended) $('#sDur').textContent = clock(); }, 1000);
+function line(role, text){
+  $('#hint')?.remove();
+  const d = document.createElement('div'); d.className = 't ' + role;
+  d.innerHTML = `<div class="av ${role==='user'?'me':''}">${role==='bot'?esc(INITIAL):'我'}</div><div class="body"><div class="name"><b>${role==='bot'?esc(NAME):'我'}</b><span>${clock()}</span></div><div class="tx">${esc(text)}</div></div>`;
+  $('#log').appendChild(d); $('#log').scrollTop = $('#log').scrollHeight; return d;
+}
+function setState(kind, text){ const st = $('#st'); st.className = 'state ' + kind; st.querySelector('span').textContent = text; $('#live').textContent = text; $('#btnStop').hidden = !(kind === 'speak' || kind === 'think'); }
+function badge(kind, text){ const b = $('#badge'); b.className = 'badge ' + kind; b.querySelector('span').textContent = text; }
+
+// ---------------------------------------------------------------- 摄像头 + 录像（留在本机）
+let camStream = null, vrec = null, chunks = [];
+async function openCam(){
+  try{ camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:{ideal:1280}}, audio:true}); $('#cam').srcObject = camStream; $('#camOff').hidden = true; badge('', 'Live'); }
+  catch(e){ $('#camOff').hidden = false; badge('', '没有摄像头'); }
+}
+function startRec(){
+  if(curMode() !== 'video' || !$('#optRec').checked || !camStream || !window.MediaRecorder) return;
+  try{ vrec = new MediaRecorder(camStream, {mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : (MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : '')});
+       chunks = []; vrec.ondataavailable = e => { if(e.data.size) chunks.push(e.data); }; vrec.start(1000); badge('rec', 'Live · recording'); }
+  catch(e){ vrec = null; }
+}
+function stopRec(){ return new Promise(res => { if(!vrec || vrec.state === 'inactive') return res(null); vrec.onstop = () => res(new Blob(chunks, {type: vrec.mimeType || 'video/webm'})); vrec.stop(); }); }
+$('#btnCam').onclick = openCam;
+applyMode();
+if(curMode() === 'video') openCam();
+
+// ---------------------------------------------------------------- 朗读：句级流式（腾讯 TTS，agent 自己的音色），可打断
+const synth = window.speechSynthesis; let voice = null, ttsBuf = '', sq = null, browserQ = [], firstChunkDone = false, tSound = null;
+const bcp = () => curLang() === 'en' ? 'en-US' : 'zh-CN';
+function pickVoice(){ const vs = synth?.getVoices() || []; const want = bcp().slice(0,2);
+  voice = vs.find(v => v.lang.toLowerCase().startsWith(want) && /Tingting|Meijia|Xiaoxiao|Yunxi|Google|Samantha|普通话/i.test(v.name)) || vs.find(v => v.lang.toLowerCase().startsWith(want)) || null; }
+if(synth){ pickVoice(); synth.onvoiceschanged = pickVoice; }
+async function loadVoices(){
+  const sel = $('#voiceSel');
+  try{
+    const r = await fetch('/v1/agents/' + AGENT + '/voices?lang=' + encodeURIComponent(curLang())); const d = await r.json();
+    sel.innerHTML = d.options.map(o => `<option value="${o.id}">${esc(o.name)} · ${esc(o.gender)}${o.id == d.default ? '（默认）' : ''}</option>`).join('');
+    const ids = d.options.map(o => String(o.id));
+    if(!ids.includes(String(pref.voice))){ pref.voice = curLang() === 'en' ? String(d.options[0]?.id || '') : ''; }
+    sel.value = pref.voice || String(d.default || '');
+  }catch(e){ sel.innerHTML = '<option value="">默认</option>'; }
+}
+$('#lang').value = pref.lang; $('#lang').onchange = () => { pref.lang = $('#lang').value; pref.voice = ''; savePref(); pickVoice(); loadVoices(); };
+$('#voiceSel').onchange = () => { pref.voice = $('#voiceSel').value; savePref(); };
+loadVoices();
+const useServer = () => !$('#optBrowserTts').checked && speechSupported();
+function speakBrowser(text){ return new Promise(res => { if(!synth) return res(); const u = new SpeechSynthesisUtterance(text); if(voice) u.voice = voice; u.lang = bcp(); u.rate = 1.02; u.onend = u.onerror = () => res(); synth.speak(u); }); }
+async function browserDrain(){ if(speaking) return; speaking = true; setState('speak', '在说'); if(!tSound) tSound = performance.now(); while(browserQ.length){ await speakBrowser(browserQ.shift()); } speaking = false; afterSpeak(); }
+function ensureQueue(){
+  if(sq) return sq;
+  sq = createSpeechQueue({ fetchAudio: pcm16PostFetcher('/v1/audio/speech/stream'), voice: curVoice() || undefined, leadSec: 0.3,
+    onStart: () => { speaking = true; setState('speak', '在说'); tSound = performance.now(); if(recorder && listening) recorder.pause(true); },
+    onDrain: () => { speaking = false; sq = null; afterSpeak(); } });
+  return sq;
+}
+function enqueue(text){ if(!$('#optTts').checked) return; if(useServer()) ensureQueue().push(text); else { browserQ.push(text); browserDrain(); } }
+function pushTts(delta, final=false){
+  ttsBuf += delta; const re = /[。！？!?；;\n]+/g; let m, last = 0;
+  while((m = re.exec(ttsBuf))){ const s = ttsBuf.slice(last, m.index + m[0].length).trim(); if(s){ enqueue(s); firstChunkDone = true; } last = m.index + m[0].length; }
+  ttsBuf = ttsBuf.slice(last);
+  if(!firstChunkDone && !final && ttsBuf.length >= 18){ const i = ttsBuf.search(/[，,、]/); if(i >= 8){ enqueue(ttsBuf.slice(0, i + 1).trim()); ttsBuf = ttsBuf.slice(i + 1); firstChunkDone = true; } }
+  if(final){ if(ttsBuf.trim()) enqueue(ttsBuf.trim()); ttsBuf = ''; firstChunkDone = false; if(sq) sq.end(); }
+}
+function shutUp(){ ttsBuf = ''; browserQ = []; if(sq){ try{ sq.stop(); }catch(e){} sq = null; } if(synth && (synth.speaking || synth.pending)) synth.cancel(); speaking = false; }
+function afterSpeak(){ if(ended) return; setState(hold ? 'hold' : 'listen', hold ? '在听你讲，不插嘴' : 'Live. Just talk.'); if(!stoppedByUser && !busy && recorder){ recorder.resume(); listening = true; } }
+
+// ---------------------------------------------------------------- 听：VAD 切段 → 服务器识别（腾讯）
+// 停顿不等于说完。三道保险：句尾是「呃/那个/然后」这类没说完的信号 → 多等 1.5s；
+// 你说「别插嘴/听我说完」→ 进入「听我讲完」模式只记不回，直到你说「我说完了」或停够 4s；按钮也能切。
+let recorder = null, recStarted = false, early = null, lastAsrMs = null;
+let abortCtl = null, curBotEl = null, interruptedFlag = false;
+function interrupt(){
+  if(ended || !(speaking || busy)) return;
+  interruptedFlag = true;
+  shutUp();
+  if(abortCtl){ try{ abortCtl.abort(); }catch(e){} }
+  if(curBotEl && !curBotEl.querySelector('.tx').textContent.endsWith('（被打断）')){ curBotEl.querySelector('.tx').textContent += ' （被打断）'; }
+  busy = false; setState('listen', 'Live. Just talk.');
+  if(!stoppedByUser && recorder){ recorder.resume(); listening = true; }
+}
+$('#btnStop').onclick = interrupt;
+let hold = false, pendingText = '', pendingEl = null, pendingTimer = null, pendingWavs = [];
+const HESITATION = /(呃|嗯|啊|额|那个|这个|然后|就是|比如说|所以|但是|因为|而且|还有|我|你|他|它|是|在|的|了|把|跟|和|要|会|想|可以|现在)[，,。、]?$/;
+const ENTER_HOLD = /(别插嘴|不要插嘴|别打断|不要打断|听我说完|听我讲完|让我说完|让我讲完|我先说完|我先讲完|先别说话|等我说完|等我讲完)/;
+const EXIT_HOLD = /(我说完了|我讲完了|说完了|讲完了|你说吧|你说呢|你觉得呢|你怎么看|该你了|轮到你|到你了)[。？！?!]*$/;
+const COMPLETE_SHORT = /^(好|好的|对|对的|是|是的|不是|不知道|没有|有|嗯|行|可以|不行|不用|不要|再见|拜拜|谢谢|你好|喂)[。！？!?]?$/;
+const cleanFillers = t => t.replace(/(^|[，,。！？!?\s])(呃|嗯|额|哦|那个|这个)+[，,、]?/g, '$1').replace(/[，,]{2,}/g, '，').replace(/^[，,、\s]+/, '').trim();
+async function transcribe(wav){
+  const fd = new FormData(); fd.append('file', new Blob([wav], {type:'audio/wav'}), 'a.wav'); fd.append('lang', curLang());
+  const r = await fetch('/v1/audio/transcriptions', {method:'POST', body: fd});
+  if(!r.ok){ let d=''; try{ d=(await r.json()).detail }catch(e){ d='HTTP '+r.status } throw new Error(d); }
+  return (await r.json()).text || '';
+}
+// 把几段 16k 单声道 WAV 拼成一段（去各自 44 字节头，重写头）。拼起来重识别比把两段文字硬接准得多。
+function concatWav(bufs){
+  const parts = bufs.map(b => new Uint8Array(b, 44)); const n = parts.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(44 + n); const dv = new DataView(out.buffer); const w = (o, str) => { for(let i = 0; i < str.length; i++) out[o + i] = str.charCodeAt(i); };
+  w(0,'RIFF'); dv.setUint32(4, 36 + n, true); w(8,'WAVE'); w(12,'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36,'data'); dv.setUint32(40, n, true);
+  let o = 44; for(const p of parts){ out.set(p, o); o += p.length; } return out.buffer;
+}
+// 「像没说完」：结尾是迟疑词/常见的话中词、逗号收尾、或太短（短片段识别本来就不准）
+const looksUnfinished = (raw, cleaned) => HESITATION.test(raw.replace(/[。！？!?]+$/, '')) || /[，,、]$/.test(raw) || (cleaned.length < 6 && !COMPLETE_SHORT.test(cleaned)) || !/[。！？!?]$/.test(raw);
+function setHold(on, why){
+  hold = on; $('#btnHold').classList.toggle('on', on); $('#btnHold').textContent = on ? '好了，你说' : '听我讲完';
+  if(on){ setState('hold', '在听你讲，不插嘴'); if(why) $('#tip').textContent = why; }
+  else { setState('listen', 'Live. Just talk.'); flushPending(); }
+}
+function flushPending(){
+  clearTimeout(pendingTimer); pendingTimer = null;
+  const text = pendingText.trim(); pendingText = ''; pendingWavs = []; const el = pendingEl; pendingEl = null;
+  if(text) send(text, el);
+}
+async function accept(raw, cleaned, wav){
+  // 有等着的上一段：把音频拼起来重识别，用整段的结果替换
+  if(pendingEl){
+    pendingWavs.push(wav);
+    let merged = null; try{ merged = (await transcribe(concatWav(pendingWavs))).trim(); }catch(e){}
+    if(merged){ raw = merged; cleaned = curLang() === 'en' ? merged : cleanFillers(merged); }
+    else { raw = pendingText + '，' + raw; cleaned = pendingText + '，' + cleaned; }
+    pendingText = cleaned; pendingEl.querySelector('.tx').textContent = cleaned;
+  } else { pendingText = cleaned; pendingWavs = [wav]; pendingEl = line('user', cleaned); }
+  clearTimeout(pendingTimer);
+  if(hold){
+    if(EXIT_HOLD.test(raw)){ setHold(false); return; }
+    pendingTimer = setTimeout(() => { if(hold) setHold(false, '停了 4 秒，我当你说完了'); }, 4000);
+    return;
+  }
+  if(ENTER_HOLD.test(raw)){ setHold(true, '好，你讲，我不插嘴。说「我说完了」或停 4 秒我再回。'); return; }
+  if(looksUnfinished(raw, cleaned)){ pendingTimer = setTimeout(flushPending, 1500); setState('listen', '像是还没说完，再等等'); }
+  else flushPending();
+}
+function ensureRecorder(){
+  if(recorder) return recorder;
+  if(!recorderSupported()){ $('#tip').textContent = '这个浏览器不支持录音，只能打字。'; return null; }
+  recorder = createRecorder({
+    silenceMs: 800, earlyPauseMs: 300, minSpeechMs: 300, maxSegmentMs: 20000, bargeInMs: 600,
+    onBargeIn: () => { if($('#optBarge').checked) interrupt(); },
+    onLevel: ({speaking: sp}) => { if(listening) $('#mic').className = 'r' + (sp ? ' listen' : ''); },
+    onEarlyPause: (wav) => { early = transcribe(wav).catch(() => null); },
+    onSegment: async (wav, durMs, meta) => {
+      if(ended || busy) return;
+      const tStop = performance.now();
+      const p = (meta && meta.earlyUsable && early) ? early : transcribe(wav).catch(() => null); early = null;
+      let raw = '';
+      try{ raw = ((await p) || '').trim(); }catch(e){ line('user', '识别失败：' + e.message).classList.add('err'); return; }
+      lastAsrMs = Math.round(performance.now() - tStop); $('#sAsr').textContent = lastAsrMs + 'ms';
+      const cleaned = curLang() === 'en' ? raw : cleanFillers(raw);
+      if(!raw) return;
+      accept(raw, cleaned, wav);
+    },
+  });
+  return recorder;
+}
+async function startListening(){
+  if(ended) return; const r = ensureRecorder(); if(!r) return;
+  try{ if(!recStarted){ await r.start(); recStarted = true; } else r.resume(); }
+  catch(e){ $('#tip').textContent = '打不开麦克风：' + e.message; return; }
+  listening = true; $('#mic').className = 'r'; setState(hold ? 'hold' : 'listen', hold ? '在听你讲，不插嘴' : 'Live. Just talk.');
+}
+function pauseListening(){ stoppedByUser = true; listening = false; if(recorder) recorder.pause(); $('#mic').className = 'r off'; setState('', '已暂停'); }
+$('#mic').onclick = () => {
+  if(ended) return;
+  if(speaking || busy){ interrupt(); return; }
+  if(t0 === null){ t0 = Date.now(); startRec(); $('#end').disabled = false; }
+  if(!stoppedByUser){ pauseListening(); } else { stoppedByUser = false; shutUp(); startListening(); }
+};
+$('#btnHold').onclick = () => { if(ended) return; setHold(!hold); };
+
+// ---------------------------------------------------------------- 说给 agent
+$('#f').onsubmit = (e) => { e.preventDefault(); const t = $('#txt').value.trim(); if(!t || ended) return; $('#txt').value = '';
+  if(t0 === null){ t0 = Date.now(); startRec(); $('#end').disabled = false; } shutUp(); send(t, line('user', t)); };
+async function send(text, el){
+  if(busy || ended) return; busy = true; setState('think', '在想'); if(recorder && listening) recorder.pause();
+  messages.push({role:'user', content:text}); turns.push({t: clock(), role:'user', text});
+  const bel = line('bot', '…'); const tx = bel.querySelector('.tx'); let full = '', ts = performance.now(), first = null; tSound = null; const asrMs = lastAsrMs; lastAsrMs = null;
+  curBotEl = bel; interruptedFlag = false; abortCtl = new AbortController();
+  try{
+    const r = await fetch('/v1/agents/' + AGENT + '/chat/completions', {method:'POST', signal: abortCtl.signal, headers:{'Content-Type':'application/json','X-Session-ID':SESSION, ...uidHeaders()},
+      body: JSON.stringify({stream:true, lang: curLang(), messages: messages.slice(-24)})});
+    if(!r.ok){ let d=''; try{ d=(await r.json()).detail }catch(e){ d='HTTP '+r.status } tx.textContent = d; bel.classList.add('err'); messages.pop(); turns.pop(); return; }
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+    while(true){
+      const {value, done} = await reader.read(); if(done) break;
+      buf += dec.decode(value, {stream:true}); let i;
+      while((i = buf.indexOf('\n')) >= 0){
+        const ln = buf.slice(0, i).trim(); buf = buf.slice(i+1);
+        if(!ln.startsWith('data:')) continue; const p = ln.slice(5).trim(); if(p === '[DONE]') continue;
+        let d = ''; try{ d = JSON.parse(p).choices[0].delta.content || ''; }catch(e){}
+        if(!d) continue;
+        if(first === null){ first = Math.round(performance.now() - ts); $('#sFirst').textContent = first + 'ms'; }
+        full += d; tx.textContent = full; $('#log').scrollTop = $('#log').scrollHeight; pushTts(d);
+      }
+    }
+    pushTts('', true);
+    const soundMs = tSound ? Math.round(tSound - ts) : null; if(soundMs) $('#sSound').textContent = soundMs + 'ms';
+    messages.push({role:'assistant', content:full}); turns.push({t: clock(), role:'bot', text: full, first_ms: first, asr_ms: asrMs, sound_ms: soundMs});
+    $('#sTurns').textContent = turns.filter(t => t.role === 'user').length;
+    $('#tip').textContent = `全句 ${Math.round(performance.now()-ts)}ms`;
+  }catch(e){
+    if(e.name === 'AbortError' || interruptedFlag){
+      // 被打断：模型那边掐掉了，已经生成的部分当它说过的（实际念到哪句没法精确知道），标记进记录
+      messages.push({role:'assistant', content: full + '（被打断）'}); turns.push({t: clock(), role:'bot', text: full, interrupted: true, first_ms: first, asr_ms: asrMs});
+      $('#sTurns').textContent = turns.filter(t => t.role === 'user').length;
+    } else { tx.textContent = '连不上：' + e.message; bel.classList.add('err'); messages.pop(); turns.pop(); }
+  }
+  finally{ abortCtl = null; busy = false; if(!speaking && !sq && !browserQ.length && !interruptedFlag) afterSpeak(); }
+}
+
+// ---------------------------------------------------------------- 结束并回顾
+$('#end').onclick = async () => {
+  if(ended) return; ended = true; $('#end').disabled = true; clearTimeout(pendingTimer); pauseListening(); shutUp(); setState('', '回顾中…'); badge('', '已结束');
+  if(recorder){ try{ recorder.stop(); }catch(e){} }
+  const blob = await stopRec(); if(camStream) camStream.getTracks().forEach(t => t.stop());
+  const rv = $('#review'); rv.style.display = 'block';
+  rv.innerHTML = `<h2>${esc(NAME)} 的回顾</h2><div class="meta">${turns.length} 句 · ${clock()} · 用它自己的方法论看这场对话</div><div class="body">…</div>`;
+  try{
+    const r = await fetch('/v1/agents/' + AGENT + '/review', {method:'POST', headers:{'Content-Type':'application/json', ...uidHeaders()}, body: JSON.stringify({session_id: SESSION, turns})});
+    const d = await r.json(); rv.querySelector('.body').textContent = r.ok ? d.review : ('回顾失败：' + (d.detail || r.status));
+  }catch(e){ rv.querySelector('.body').textContent = '回顾失败：' + e.message; }
+  const acts = document.createElement('div'); acts.className = 'acts';
+  if(blob){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${AGENT}-${SESSION}.${blob.type.includes('mp4')?'mp4':'webm'}`; a.textContent = `下载录像（${(blob.size/1048576).toFixed(1)} MB，只在本机）`; acts.appendChild(a); }
+  const again = document.createElement('a'); again.href = location.pathname; again.textContent = '再来一场'; acts.appendChild(again);
+  if(curUid()){ const me = document.createElement('a'); me.href = '/me'; me.textContent = '我的全部记录和综合复盘 ↗'; acts.appendChild(me); }
+  rv.appendChild(acts); rv.scrollIntoView({behavior:'smooth'}); setState('', '已结束');
+};
+</script>
+</body>
+</html>
