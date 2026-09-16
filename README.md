@@ -286,3 +286,36 @@ https://qiuqiu.yongle.school/voicekit/test 点「开始对话」。
 6. LLM 失败异常抛穿 SSE → **孩子听到话说一半突然静音**，
    比说错话更糟（孩子会以为是自己说错了什么）
 
+
+---
+
+## testkit：换 agent 不换检查
+
+`voice_kit/testkit/` 是一套跟产品无关的对话质量回归。用例是 JSON（各产品自带），
+目标可以是线上服务、进程内 app、或任意 python 函数（直接测一个 agent 的大脑）；
+检查器只做机械可判的事：禁忌词（带否定白名单）、内部标记泄漏、不打分、听众只描述、
+整句收尾、首字预算、接管、SSE 协议。不评价"答得好不好"。
+
+```bash
+python -m voice_kit.testkit list
+python -m voice_kit.testkit run --suite qiuqiu_8rules \
+    --service https://voice.qiuyiwu.com --key $VOICEKIT_KEY --md out.md --html out.html
+```
+
+自带四套：`qiuqiu_8rules`（逐字同源于球球老师 `test_8rules_regression`）、
+`gate_contract`（任何租户都得过：接管 / 拦截 / 误拦）、
+`coach_no_scoring`、`listener_describe_only`（逐字同源于 AI 教练 `forbidden.ts`）。
+CI 里用 `AppTarget` + 假 LLM 测 testkit 自己（`tests/test_testkit.py`）；
+真回归要打真模型，慢且花钱，和球球老师 `RUN_8RULES=1` 一个口径。
+
+---
+
+## agents/ 与后台：人设库真源在 git
+
+`agents/<id>/` 六层文件（manifest.yaml · persona.md · method.md · playbook.md · lens.yaml，
+第六层铁律是 manifest 里的 `rails` 档位，由平台注入）。`voice_kit/agents.py` 负责读、
+静态审查（入职第一关：字典、档位与受众匹配、读取层级、松绑措辞、事实层不可写）、写回升版本。
+
+后台 `/admin/agents?k=<VOICEKIT_ADMIN_TOKEN>`：编辑六层、校验草稿、升版本、看 git 历史、
+跑 testkit 套件并把报告落到 `agents/<id>/reports/`，评估卡的「守线 / 快」从报告读。
+没配 token 时后台 404。本地看：`sh scripts/dev_admin.sh`（全假凭据）。

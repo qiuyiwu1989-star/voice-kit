@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {"name": "admin-dev", "runtimeExecutable": "sh", "runtimeArgs": ["scripts/dev_admin.sh"], "port": 8020}
+  ]
+}
