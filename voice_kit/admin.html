@@ -90,7 +90,7 @@ a.dl{font-size:13px;color:var(--acc);text-decoration:none;border:1px solid var(-
 <body>
 <div id="app">
 <aside>
-  <nav class="top"><a href="/admin/agents" class="on">Agent 人设库</a><a href="/admin/memory">用户记忆</a></nav>
+  <nav class="top"><a href="/admin/agents" class="on">Agent 人设库</a><a href="/admin/memory">用户记忆</a><a href="/admin/feedback">数据回流</a></nav>
   <h1>Agent 人设库</h1>
   <div class="sub" id="root">读取中…</div>
   <div id="list"></div>
@@ -221,7 +221,8 @@ function render(){
   <div class="head"><h2>${esc(a.name)}</h2><span class="v">v${esc(a.version)} · ${esc(a.id)}</span>
     ${statusPill(a.status)} ${pill(a.kind==='code'?'代码级':'配置级')} ${pill(a.read_level)} ${pill('rails: '+a.rails)} ${pill('model: '+(a.model||DICT.default_model+'（默认）'))}
     ${a.ok?pill('第一关通过','acc'):pill('第一关不过','bad')}
-    ${a.kind==='config'?`<a href="/talk/${esc(a.id)}" target="_blank" style="font-size:13px">打开用户端 ↗</a>`:''}</div>
+    ${a.kind==='config'?`<a href="/talk/${esc(a.id)}" target="_blank" style="font-size:13px">打开用户端 ↗</a>`:''}
+    <a href="/admin/feedback#${encodeURIComponent(a.id)}" style="font-size:13px">数据回流 →</a></div>
   <p class="notes">${esc(a.notes||'')}</p>
   ${scorecard(a.scorecard)}
   <div class="tabs">${LAYERS.map(l => `<button data-l="${l}" class="${TAB===l?'on':''}">${LAYER_LABEL[l]}${DIRTY[l]?' •':''}${a.missing.includes(l)?' ⚠':''}</button>`).join('')}

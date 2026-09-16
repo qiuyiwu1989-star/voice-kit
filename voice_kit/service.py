@@ -426,6 +426,7 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
     # 铁律从 rails 档位注入。鉴权：后台门票（试聊用），或所属产品的租户钥匙。
     from . import agents as AG
     from . import memory as MEM
+    from . import feedback as FB
     from .admin import _authed as _admin_authed, _root as _agents_root
 
     # 用户端门票：给真人用的页面不该拿后台门票。`VOICEKIT_UI_TOKEN`，?k= 种 cookie vk_ui。
@@ -607,6 +608,8 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             yield _sse(_chunk(cid, model, None, "stop"))
             yield b"data: [DONE]\n\n"
 
+        stream = FB.tap_stream(stream, _agents_root(), ag, asm, request=request, user_text=user_text, uid=uid,  # 回流采集钩子
+                               lang=lang, product=_mem_product(request, authorization))
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -848,5 +851,8 @@ li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;col
     # 用户记忆后台 /admin/memory：同一张后台门票，和 Agent 管理并列
     from .memory_admin import build_router as build_memory_router
     app.include_router(build_memory_router(known_products=lambda: [t.memory_product for t in registry.all()]))
+    # 数据回流后台 /admin/feedback：同一张门票；分析 / 提案 / 评测用同一个 llm
+    from .feedback_admin import build_router as build_feedback_router
+    app.include_router(build_feedback_router(llm_factory=lambda: llm))
 
     return app
