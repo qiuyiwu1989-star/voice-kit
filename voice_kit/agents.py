@@ -264,8 +264,9 @@ def load_all(root: Path) -> List[Agent]:
         return []
     # users/ 是用户记忆库（memory.py），和 agent 目录同住一个根——它不是 agent。
     # 不跳过的话后台列表和 /v1/agents 里会多出一个六层全缺的「users」。
+    # `_` 开头的同理：_feedback/ 是回流数据（feedback.py）；agent id 本来就不许以 _ 开头。
     return sorted((load_agent(p) for p in root.iterdir()
-                   if p.is_dir() and not p.name.startswith(".") and p.name not in NON_AGENT_DIRS),
+                   if p.is_dir() and not p.name.startswith((".", "_")) and p.name not in NON_AGENT_DIRS),
                   key=lambda a: a.id)
 
 

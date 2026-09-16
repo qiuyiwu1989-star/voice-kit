@@ -12,3 +12,5 @@ venv/
 agents/*/sessions/
 agents/*/reports/
 agents/users/
+# 回流：每一轮的原话、分析、提案、用例、审计（feedback.py）。_ 开头的目录都不是 agent
+agents/_feedback/
