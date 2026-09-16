@@ -5,6 +5,8 @@ __pycache__/
 .DS_Store
 venv/
 .venv/
+# 不带斜杠的这一行不能删：worktree 里的 .venv 是软链，带斜杠匹配不到软链
+.venv
 
 # 用户数据永不入库：真人对话、抽出来的事实、跑出来的报告
 agents/*/sessions/
