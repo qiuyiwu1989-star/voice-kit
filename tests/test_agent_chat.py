@@ -234,7 +234,9 @@ def test_talk_page_has_video_and_review_controls(app, monkeypatch):
     t = TestClient(app).get("/talk/kefu-xiaoan?k=go").text
     assert "getUserMedia" in t and "MediaRecorder" in t and "结束并回顾" in t and "/review" in t
     assert "__INITIAL__" not in t and "__SHORT__" not in t
-    assert "NAME = '小安'" in t and "直达型成交" not in t and "INITIAL = '小'" in t
+    # 身份以 JSON 注入（中英两套），短名按「·」截前半
+    assert '"short": "小安"' in t and '"initial": "小"' in t
+    assert "__IDENT__" not in t
     assert "听我讲完" in t and "ENTER_HOLD" in t
 
 
@@ -414,3 +416,65 @@ def test_upstream_failure_is_not_spoken_as_agent_words(app, root):
     t = sse_text(chat(TestClient(app), "qiuqiu", "你好", Authorization="Bearer door"))
     assert "HTTP" not in t and "上游" not in t
     assert "连不上" in t
+
+
+# ---------------------------------------------------------------- 中英文同步：通话页 / 列表页 / 出口页
+
+def _ident_from_page(page: str) -> dict:
+    raw = page.split("const IDENT = ", 1)[1].split(";\n", 1)[0]
+    return json.loads(raw)
+
+
+def test_talk_page_injects_bilingual_ident_json(app, monkeypatch):
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    page = TestClient(app, cookies={"vk_ui": "go"}).get("/talk/kefu-xiaoan").text
+    ident = _ident_from_page(page)
+    assert ident["zh"] == {"name": "小安 · 安抚型客服", "short": "小安", "blurb": "有什么不顺心的，跟我说", "initial": "小"}
+    assert ident["en"]["name"] == "Ann · Empathetic Support" and ident["en"]["short"] == "Ann" and ident["en"]["initial"] == "A"
+    assert ident["en"]["blurb"].startswith("Something's not right")
+    # 界面字典两套都在，英文模式的「听我讲完」口令也在
+    assert "Practice" not in page and "I18N" in page and "Let me finish" in page and "ENTER_HOLD_EN" in page
+
+
+def test_talk_page_ident_falls_back_to_chinese_without_english_fields(app, monkeypatch):
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    page = TestClient(app, cookies={"vk_ui": "go"}).get("/talk/listener?lang=en").text
+    ident = _ident_from_page(page)
+    assert ident["en"]["name"] == ident["zh"]["name"] == "听众" and ident["en"]["short"] == "听众"
+
+
+def test_ident_json_cannot_close_the_script_tag(root):
+    import yaml
+    from voice_kit import service as S
+    p = root / "kefu-xiaoan" / "manifest.yaml"
+    m = yaml.safe_load(p.read_text(encoding="utf-8")); m["blurb_en"] = "</script><script>alert(1)</script>"
+    p.write_text(yaml.safe_dump(m, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    out = S.ident_json(S.agent_ident(A.load_agent(root / "kefu-xiaoan")))
+    assert "<" not in out and json.loads(out)["en"]["blurb"] == "</script><script>alert(1)</script>"
+
+
+def test_talk_index_in_english(app, monkeypatch):
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    c = TestClient(app, cookies={"vk_ui": "go"})
+    idx = c.get("/talk?lang=en&k=go").text
+    assert "Ann · Empathetic Support" in idx and "Quinn · Consultative Sales" in idx and "Frank · Straight-Talk Closer" in idx
+    assert "Practice in AI Coach ↗" in idx and "在 AI 教练里练" not in idx
+    assert "local trial" in idx and "本地试运行" not in idx
+    # 没写英文的 agent 退回中文，不报错
+    assert "听众" in idx and "球球老师" in idx
+    # 语言链接互相切换，保留 k；通话页链接带上语言
+    assert 'href="/talk?lang=zh&amp;k=go"' in idx and "<b>English</b>" in idx
+    assert 'href="/talk/kefu-xiaoan?k=go&amp;lang=en"' in idx
+    # Accept-Language 也认；?lang 优先
+    assert "Practice in AI Coach" in c.get("/talk", headers={"Accept-Language": "en-US,en;q=0.9"}).text
+    zh = c.get("/talk?lang=zh&k=go", headers={"Accept-Language": "en-US"}).text
+    assert "在 AI 教练里练 ↗" in zh and "小安 · 安抚型客服" in zh and 'href="/talk?lang=en&amp;k=go"' in zh
+
+
+def test_host_exit_page_in_english(app, monkeypatch):
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    c = TestClient(app, cookies={"vk_ui": "go"})
+    page = c.get("/talk/red-coach?lang=en").text
+    assert "SESSION =" not in page and "Practice there" in page and "jiaolian.qiuyiwu.com/s/founder-pitch" in page
+    assert "去那边练" not in page
+    assert "去那边练" in c.get("/talk/red-coach").text

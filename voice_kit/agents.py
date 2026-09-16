@@ -362,6 +362,12 @@ def validate(ag: Agent, *, author_level: str = "L0",
             out.append(Issue("manifest.yaml", f"{key} 写了就要是非空字符串（不需要英文就整行删掉）"))
     # 口径对齐：中文 name 用「名字 · 类型」，对话里只显示「·」前的名字（service 里 split("·")）。
     # 英文那边要用同一个分隔，否则英文页面上对话里会带着类型一起显示。
+    # 中英同步：有中文没英文 → warn（不是 fail）。/talk 和宿主的英文界面上会退回中文，
+    # 能用但不整齐；在后台亮一条警告，让「补英文」这件事看得见。
+    if str(m.get("name") or "").strip() and "name_en" not in m:
+        out.append(Issue("manifest.yaml", "缺英文：有 name 没有 name_en（英文界面会显示中文名）", "warn"))
+    if str(m.get("blurb") or "").strip() and "blurb_en" not in m:
+        out.append(Issue("manifest.yaml", "缺英文：有 blurb 没有 blurb_en（英文界面会显示中文简介）", "warn"))
     ne = m.get("name_en")
     if isinstance(ne, str) and ne.strip() and ("·" in str(m.get("name") or "")) != ("·" in ne):
         out.append(Issue("manifest.yaml", "name 和 name_en 要么都用「名字 · 类型」，要么都不用——"

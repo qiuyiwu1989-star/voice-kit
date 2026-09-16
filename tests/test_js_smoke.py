@@ -11,7 +11,8 @@ REPO = Path(__file__).parent.parent
 STUB = REPO / "tests" / "js" / "dom_stub.mjs"
 
 PLACEHOLDERS = {"__MODE__": "voice", "__AGENT__": "qiuqiu", "__SHORT__": "球球", "__NAME__": "球球老师",
-                "__VOICE__": "502001", "__INITIAL__": "球", "__BLURB__": ""}
+                "__VOICE__": "502001", "__INITIAL__": "球", "__BLURB__": "",
+                "__IDENT__": '{"zh": {"name": "球球老师", "short": "球球", "blurb": "", "initial": "球"}, "en": {"name": "Qiuqiu", "short": "Qiuqiu", "blurb": "", "initial": "Q"}}'}
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="没有 node")

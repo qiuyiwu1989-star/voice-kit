@@ -46,6 +46,38 @@ from . import hotwords as HW
 from . import voices as V
 
 
+# ---------------------------------------------------------------- 界面语言（/talk 列表、出口页、通话页）
+# 界面语言只有 zh / en 两档；「中英混说」是对话语言，界面按中文。
+def request_ui_lang(request: Request) -> str:
+    """`?lang=` 优先，其次 Accept-Language 以 en 开头 → en，否则 zh。"""
+    q = (request.query_params.get("lang") or "").strip().lower()
+    if q:
+        return "en" if q.startswith("en") else "zh"
+    al = (request.headers.get("accept-language") or "").strip().lower()
+    return "en" if al.startswith("en") else "zh"
+
+
+def agent_ident(ag) -> dict:
+    """agent 在界面上的身份，中英两套。英文缺哪项就用中文顶那一项——页面上不能没名字。
+    short 的截法两边一致：按「·」取前半（「小安 · 安抚型客服」→「小安」）。"""
+    m = ag.manifest
+    zh_blurb = str(m.get("blurb") or m.get("archetype") or "")
+
+    def one(name: str, blurb: str, short_name) -> dict:
+        short = str(short_name or name.split("·")[0].strip() or name)
+        return {"name": name, "short": short, "blurb": blurb, "initial": short[:1]}
+
+    name_en, blurb_en = ag._en("name_en"), ag._en("blurb_en")
+    zh = one(ag.name, zh_blurb, m.get("short_name"))
+    en = one(name_en or ag.name, blurb_en or zh_blurb, None if name_en else m.get("short_name"))
+    return {"zh": zh, "en": en}
+
+
+def ident_json(ident: dict) -> str:
+    """注入 <script> 的 JSON：`<` 转成 \\u003c，名字里写 `</script>` 也关不掉脚本。"""
+    return json.dumps(ident, ensure_ascii=False).replace("<", "\\u003c")
+
+
 # 句界故意**不含** `…`：中文的 `……` 多半是"话说到一半"（"我想想……"），
 # 在那儿放行正是这个修复要消灭的那种半句话。
 # 两个客户端实现（球球 web/lib、zaowuyun-voice）也都不把它当句界——
@@ -540,22 +572,38 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             from fastapi.responses import HTMLResponse as _H
             return _H("<meta charset=utf-8><p>需要门票：地址后面加 <code>?k=&lt;VOICEKIT_UI_TOKEN&gt;</code></p>", 401)
         ag = AG.load_agent(d)
+        ui = request_ui_lang(request)
+        ident = agent_ident(ag)
+        me = ident[ui]
         if _needs_host(ag):
             from fastapi.responses import HTMLResponse as _H
-            entry = _host_entry(ag)
-            link = f'<p><a href="{entry}">去那边练 →</a></p>' if entry else "<p>从它所在的产品里进入。</p>"
-            return _H(f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>{ag.name}</title><style>body{{font:16px/1.7 -apple-system,"PingFang SC",sans-serif;margin:0;padding:48px 24px;background:#F5F6F8;color:#1B2028}}
+            import html as _html
+            entry = _html.escape(_host_entry(ag))
+            en = ui == "en"
+            if entry:
+                link = f'<p><a href="{entry}">{"Practice there →" if en else "去那边练 →"}</a></p>'
+            else:
+                link = "<p>Open it from the product it lives in.</p>" if en else "<p>从它所在的产品里进入。</p>"
+            body = ("<p>This agent's method runs inside its host product — each practice session has to be set up "
+                    "there first, so it knows which page you're on.</p>" if en else
+                    "<p>这个 agent 的方法论跑在它所在的产品里——每一场练习都要在那边建好，它才知道你讲到了哪一页。</p>")
+            foot = ("This is the generic talk page; it can only open agents whose persona lives here." if en else
+                    "这里是通用对话页，只能直接开「人设在这里」的 agent。")
+            nm = _html.escape(me["name"])
+            return _H(f"""<!doctype html><html lang="{"en" if en else "zh-CN"}"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>{nm}</title><style>body{{font:16px/1.7 -apple-system,"PingFang SC",sans-serif;margin:0;padding:48px 24px;background:#F5F6F8;color:#1B2028}}
 main{{max-width:30em;margin:0 auto}} a{{color:#5A4FE6}} small{{color:#7B8494}}</style>
-<main><h1>{ag.name}</h1>
-<p>这个 agent 的方法论跑在它所在的产品里——每一场练习都要在那边建好，它才知道你讲到了哪一页。</p>
-{link}<p><small>这里是通用对话页，只能直接开「人设在这里」的 agent。</small></p></main>""", 200)
+<main><h1>{nm}</h1>
+{body}
+{link}<p><small>{foot}</small></p></main>""", 200)
+        import html as _html
         html = (Path(__file__).parent / "talk.html").read_text(encoding="utf-8")
-        blurb = str(ag.manifest.get("blurb") or ag.manifest.get("archetype") or "")
-        # 对话里只显示名字，不带「· 直达型成交」这种类型后缀（2026-09-14 用户要求）
-        short = str(ag.manifest.get("short_name") or ag.name.split("·")[0].strip() or ag.name)
-        html = (html.replace("__NAME__", ag.name).replace("__SHORT__", short).replace("__BLURB__", blurb)
-                    .replace("__AGENT__", ag.id).replace("__INITIAL__", short[:1])
+        # 对话里只显示名字，不带「· 直达型成交」这种类型后缀（2026-09-14 用户要求）——截法在 agent_ident 里。
+        # HTML 里的占位按服务端猜的语言先填一份（没 JS 时也有名字）；页面脚本再按 IDENT 和界面语言重填。
+        html = (html.replace("__IDENT__", ident_json(ident))
+                    .replace("__NAME__", _html.escape(me["name"])).replace("__SHORT__", _html.escape(me["short"]))
+                    .replace("__BLURB__", _html.escape(me["blurb"]))
+                    .replace("__AGENT__", ag.id).replace("__INITIAL__", _html.escape(me["initial"]))
                     .replace("__VOICE__", str(ag.manifest.get("voice") or ""))
                     .replace("__MODE__", str(ag.manifest.get("mode") or "video")))
         from fastapi.responses import HTMLResponse as _H
@@ -585,24 +633,46 @@ main{{max-width:30em;margin:0 auto}} a{{color:#5A4FE6}} small{{color:#7B8494}}</
         if not (_ui_authed(request) or _admin_authed(request)):
             from fastapi.responses import HTMLResponse as _H
             return _H("<meta charset=utf-8><p>需要门票：地址后面加 <code>?k=&lt;VOICEKIT_UI_TOKEN&gt;</code></p>", 401)
+        import html as _html
+        import urllib.parse as _up
         k = request.query_params.get("k", "")
+        ui = request_ui_lang(request)
+        en = ui == "en"
+        explicit = bool(request.query_params.get("lang"))
+
+        def _qs(**kv) -> str:
+            kv = {x: y for x, y in kv.items() if y}
+            return ("?" + _up.urlencode(kv)) if kv else ""
+
         def _row(a):
             # 宿主型 agent 直接链去宿主产品 —— 在这里点开必挂（见 _needs_host）
             host = _needs_host(a)
-            href = (_host_entry(a) or f"/talk/{a.id}") if host else f'/talk/{a.id}{"?k=" + k if k else ""}'
-            tag = " · 在 AI 教练里练 ↗" if host else (" · 本地试运行" if a.kind == "code" else "")
-            return (f'<li><a href="{href}"><b>{a.name}</b>'
-                    f'<small>{a.manifest.get("blurb") or a.manifest.get("archetype") or ""} · '
-                    f'{a.manifest.get("model") or "默认模型"}{tag}</small></a></li>')
+            me = agent_ident(a)[ui]
+            # 列表是英文（或明确选了语言）→ 通话页跟着开同一种语言；否则让通话页自己按本机偏好定
+            href = (_host_entry(a) or f"/talk/{a.id}") if host else \
+                f"/talk/{a.id}" + _qs(k=k, lang=ui if (en or explicit) else "")
+            if host:
+                tag = " · Practice in AI Coach ↗" if en else " · 在 AI 教练里练 ↗"
+            else:
+                tag = (" · local trial" if en else " · 本地试运行") if a.kind == "code" else ""
+            model = a.manifest.get("model") or ("default model" if en else "默认模型")
+            return (f'<li><a href="{_html.escape(href)}"><b>{_html.escape(me["name"])}</b>'
+                    f'<small>{_html.escape(me["blurb"])} · {_html.escape(str(model))}{tag}</small></a></li>')
         items = "".join(_row(a) for a in AG.load_all(_agents_root())
                         if not [i for i in AG.validate(a) if i.severity == "fail"])
+        zh_link = _html.escape("/talk" + _qs(lang="zh", k=k))
+        en_link = _html.escape("/talk" + _qs(lang="en", k=k))
+        switch = (f'<a href="{zh_link}">中文</a> | <b>English</b>' if en
+                  else f'<b>中文</b> | <a href="{en_link}">English</a>')
+        title = "Pick someone to talk to" if en else "选一个聊"
         from fastapi.responses import HTMLResponse as _H
-        return _H(f"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>选一个聊</title><style>body{{font:16px/1.6 -apple-system,"PingFang SC",sans-serif;margin:0;padding:24px;background:#F5F6F8;color:#1B2028}}
+        return _H(f"""<!doctype html><html lang="{"en" if en else "zh-CN"}"><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>{title}</title><style>body{{font:16px/1.6 -apple-system,"PingFang SC",sans-serif;margin:0;padding:24px;background:#F5F6F8;color:#1B2028}}
 h1{{font-size:20px}} ul{{list-style:none;padding:0;display:grid;gap:10px;max-width:520px}} li a{{display:block;background:#fff;border:1px solid #DCE0E6;border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit}}
-li a b{{display:block}} li a small{{color:#7B8494}}
+li a b{{display:block}} li a small{{color:#7B8494}} nav.lang{{font-size:14px;color:#7B8494}} nav.lang a{{color:#5A4FE6}}
 @media (prefers-color-scheme:dark){{body{{background:#13161B;color:#E7EAF0}} li a{{background:#1A1E25;border-color:#2A2F38}}}}</style>
-<h1>选一个聊</h1><ul>{items}</ul>""")
+<nav class="lang">{switch}</nav>
+<h1>{title}</h1><ul>{items}</ul>""")
 
     @app.post("/v1/agents/{agent_id}/review")
     async def agent_review(agent_id: str, request: Request, authorization: str = Header(None)):

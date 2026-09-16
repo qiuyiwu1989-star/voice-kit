@@ -526,3 +526,20 @@ def test_english_name_must_follow_same_name_type_convention(root):
     issues = A.validate(A.load_agent(root / "guwen-axun"))
     assert any("name_en" in i.message and i.severity == "warn" for i in issues)
     assert not [m for m in fails(issues) if "name_en" in m]
+
+
+def test_missing_english_is_a_warn_not_a_fail(root):
+    # 有中文没英文：warn「缺英文」，不挡上线
+    ag = A.load_agent(root / "listener")
+    issues = A.validate(ag)
+    assert any("缺英文" in i.message and "name_en" in i.message and i.severity == "warn" for i in issues)
+    assert not [m for m in fails(issues) if "缺英文" in m]
+    # blurb 有、blurb_en 没有 → 也 warn
+    p = root / "guwen-axun" / "manifest.yaml"
+    m = yaml.safe_load(p.read_text(encoding="utf-8")); m.pop("blurb_en", None)
+    p.write_text(yaml.safe_dump(m, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    issues = A.validate(A.load_agent(root / "guwen-axun"))
+    assert any("缺英文" in i.message and "blurb_en" in i.message and i.severity == "warn" for i in issues)
+    assert not [i for i in issues if "缺英文" in i.message and "name_en" in i.message]
+    # 两项都写了 → 没有「缺英文」
+    assert not [i for i in A.validate(A.load_agent(root / "kefu-xiaoan")) if "缺英文" in i.message]

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>__SHORT__ · 通话</title>
+<title>__SHORT__</title>
 <style>
 :root{--bg:#000;--panel:#121214;--panel2:#1a1a1e;--ink:#F2F2F4;--ink2:#B8BAC2;--ink3:#7E818C;--line:#26272C;--acc:#D3245F;--accbg:#2B1119;--ok:#2A9D5C;--warn:#E3B45B;--bad:#E38484}
 *{box-sizing:border-box}
@@ -80,37 +80,37 @@ form.txt button{font:inherit;background:#222;color:#ddd;border:1px solid #333;bo
     <div class="left">
       <div class="video">
         <video id="cam" autoplay muted playsinline></video>
-        <div class="badge" id="badge"><i></i><span>准备中</span></div>
-        <div class="off" id="camOff" hidden><span>摄像头没开</span><button id="btnCam">打开摄像头</button></div>
+        <div class="badge" id="badge"><i></i><span data-i18n="badge_ready">准备中</span></div>
+        <div class="off" id="camOff" hidden><span data-i18n="cam_off">摄像头没开</span><button id="btnCam" data-i18n="cam_open">打开摄像头</button></div>
       </div>
       <div class="card">
-        <div class="av">__INITIAL__</div>
-        <div class="who"><b>__SHORT__</b><small>__BLURB__</small></div>
-        <div class="state" id="st"><i></i><span>准备好了</span></div>
+        <div class="av" id="agAv">__INITIAL__</div>
+        <div class="who"><b id="agShort">__SHORT__</b><small id="agBlurb">__BLURB__</small></div>
+        <div class="state" id="st"><i></i><span data-i18n="st_ready">准备好了</span></div>
       </div>
       <div class="ctl">
-        <button class="r off" id="mic" title="开始 / 暂停听">🎙</button>
-        <span class="live" id="live">点一下开始</span>
-        <button class="hold" id="btnHold" title="它只听不回，直到你说「我说完了」或停够 4 秒">听我讲完</button>
-        <button class="hold stop" id="btnStop" hidden title="它说话或在想的时候，点这里或点麦克风都能打断">✋ 打断</button>
-        <button class="end" id="end" disabled>结束并回顾</button>
+        <button class="r off" id="mic" data-i18n-title="mic_title" title="开始 / 暂停听">🎙</button>
+        <span class="live" id="live" data-i18n="live_start">点一下开始</span>
+        <button class="hold" id="btnHold" data-i18n-title="hold_title" title="它只听不回，直到你说「我说完了」或停够 4 秒">听我讲完</button>
+        <button class="hold stop" id="btnStop" hidden data-i18n-title="stop_title" title="它说话或在想的时候，点这里或点麦克风都能打断" data-i18n="stop">✋ 打断</button>
+        <button class="end" id="end" disabled data-i18n="end">结束并回顾</button>
       </div>
-      <div class="stats"><span>时长 <b id="sDur">0:00</b></span><span>来回 <b id="sTurns">0</b></span><span>识别 <b id="sAsr">—</b></span><span>首字 <b id="sFirst">—</b></span><span>出声 <b id="sSound">—</b></span></div>
+      <div class="stats"><span><span data-i18n="s_dur">时长</span> <b id="sDur">0:00</b></span><span><span data-i18n="s_turns">来回</span> <b id="sTurns">0</b></span><span><span data-i18n="s_asr">识别</span> <b id="sAsr">—</b></span><span><span data-i18n="s_first">首字</span> <b id="sFirst">—</b></span><span><span data-i18n="s_sound">出声</span> <b id="sSound">—</b></span></div>
       <div class="tip" id="tip"></div>
     </div>
     <div class="right">
-      <div class="transcript" id="log"><p class="hint" id="hint">点麦克风开始。你说话它听，停一下它就接；它说话时你开口，它会停。想一口气讲完就点「听我讲完」，或者直接说「你别插嘴」。</p></div>
-      <form class="txt" id="f"><input id="txt" placeholder="打字也行……" autocomplete="off"><button type="submit">发送</button></form>
+      <div class="transcript" id="log"><p class="hint" id="hint" data-i18n="hint">点麦克风开始。你说话它听，停一下它就接；它说话时你开口，它会停。想一口气讲完就点「听我讲完」，或者直接说「你别插嘴」。</p></div>
+      <form class="txt" id="f"><input id="txt" placeholder="打字也行……" data-i18n-ph="txt_ph" autocomplete="off"><button type="submit" data-i18n="send">发送</button></form>
       <div class="opts">
-        <label>模式 <select id="mode"><option value="video">视频</option><option value="voice">仅语音</option><option value="text">文字</option></select></label>
-        <label>我是 <input id="uid" placeholder="名字，用来记住你" style="width:8em;font:inherit;font-size:12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 6px"></label>
-        <a id="meLink" href="/me" style="color:var(--ink3)">我的记录 ↗</a>
-        <label>语言 <select id="lang"><option value="zh">中文</option><option value="en">English</option><option value="mixed">中英混说</option></select></label>
-        <label>音色 <select id="voiceSel"><option value="">默认</option></select></label>
-        <label><input type="checkbox" id="optTts" checked> 朗读</label>
-        <label><input type="checkbox" id="optBarge" checked> 我一开口它就闭嘴</label>
-        <label><input type="checkbox" id="optRec" checked> 录像（本机）</label>
-        <label title="服务器嗓子出错时才需要"><input type="checkbox" id="optBrowserTts"> 用浏览器嗓子</label>
+        <label><span data-i18n="o_mode">模式</span> <select id="mode"><option value="video" data-i18n="m_video">视频</option><option value="voice" data-i18n="m_voice">仅语音</option><option value="text" data-i18n="m_text">文字</option></select></label>
+        <label><span data-i18n="o_uid">我是</span> <input id="uid" placeholder="名字，用来记住你" data-i18n-ph="uid_ph" style="width:8em;font:inherit;font-size:12px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:1px 6px"></label>
+        <a id="meLink" href="/me" style="color:var(--ink3)" data-i18n="me_link">我的记录 ↗</a>
+        <label><span data-i18n="o_lang">语言</span> <select id="lang"><option value="zh" data-i18n="l_zh">中文</option><option value="en">English</option><option value="mixed" data-i18n="l_mixed">中英混说</option></select></label>
+        <label><span data-i18n="o_voice">音色</span> <select id="voiceSel"><option value="" data-i18n="v_default">默认</option></select></label>
+        <label><input type="checkbox" id="optTts" checked> <span data-i18n="o_tts">朗读</span></label>
+        <label><input type="checkbox" id="optBarge" checked> <span data-i18n="o_barge">我一开口它就闭嘴</span></label>
+        <label><input type="checkbox" id="optRec" checked> <span data-i18n="o_rec">录像（本机）</span></label>
+        <label title="服务器嗓子出错时才需要" data-i18n-title="o_btts_title"><input type="checkbox" id="optBrowserTts"> <span data-i18n="o_btts">用浏览器嗓子</span></label>
       </div>
     </div>
   </div>
@@ -121,12 +121,84 @@ import { createRecorder, recorderSupported } from "/talk/lib/recorder.js";
 import { createSpeechQueue, pcm16PostFetcher, speechSupported } from "/talk/lib/speechQueue.js";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const AGENT = '__AGENT__', NAME = '__SHORT__', DEFAULT_VOICE = '__VOICE__', INITIAL = '__INITIAL__';
+const AGENT = '__AGENT__', DEFAULT_VOICE = '__VOICE__';
+// agent 的中英两套身份（name/short/blurb/initial），服务端 agent_ident 给的；英文缺项时服务端已用中文顶上
+const IDENT = __IDENT__;
 const PREF_KEY = 'talk-pref-' + AGENT;
-let pref = {lang: 'zh', voice: '', mode: '__MODE__' || 'video', uid: ''}; try{ pref = {...pref, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}')}; }catch(e){}
+let pref = {lang: 'zh', voice: '', mode: '__MODE__' || 'video', uid: ''}, stored = {};
+try{ stored = JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}; }catch(e){}
+pref = {...pref, ...stored};
+// 首次打开的对话语言：URL ?lang= 优先 → 本机记住的 → 浏览器语言以 en 开头 → 中文
+{ let q = null; try{ q = new URLSearchParams(location.search || '').get('lang'); }catch(e){}
+  const LANGS = ['zh', 'en', 'mixed'];
+  pref.lang = LANGS.includes(q) ? q : (LANGS.includes(stored.lang) ? stored.lang : (/^en/i.test((typeof navigator !== 'undefined' && navigator.language) || '') ? 'en' : 'zh')); }
 const savePref = () => { try{ localStorage.setItem(PREF_KEY, JSON.stringify(pref)); }catch(e){} };
 const curVoice = () => pref.voice || DEFAULT_VOICE;
 const curLang = () => pref.lang || 'zh';
+
+// ---------------------------------------------------------------- 界面文字：跟着对话语言走（en → 英文；zh / mixed → 中文）
+const I18N = {
+  zh: {
+    title: '通话', badge_ready: '准备中', badge_live: 'Live', badge_rec: 'Live · 录像中', badge_nocam: '没有摄像头', badge_ended: '已结束',
+    cam_off: '摄像头没开', cam_open: '打开摄像头',
+    st_ready: '准备好了', live_start: '点一下开始', mic_title: '开始 / 暂停听',
+    hold: '听我讲完', hold_on: '好了，你说', hold_title: '它只听不回，直到你说「我说完了」或停够 4 秒',
+    stop: '✋ 打断', stop_title: '它说话或在想的时候，点这里或点麦克风都能打断', end: '结束并回顾',
+    s_dur: '时长', s_turns: '来回', s_asr: '识别', s_first: '首字', s_sound: '出声',
+    hint: '点麦克风开始。你说话它听，停一下它就接；它说话时你开口，它会停。想一口气讲完就点「听我讲完」，或者直接说「你别插嘴」。',
+    txt_ph: '打字也行……', send: '发送',
+    o_mode: '模式', m_video: '视频', m_voice: '仅语音', m_text: '文字',
+    o_uid: '我是', uid_ph: '名字，用来记住你', me_link: '我的记录 ↗',
+    o_lang: '语言', l_zh: '中文', l_mixed: '中英混说', o_voice: '音色', v_default: '默认', v_default_mark: '（默认）',
+    o_tts: '朗读', o_barge: '我一开口它就闭嘴', o_rec: '录像（本机）', o_btts: '用浏览器嗓子', o_btts_title: '服务器嗓子出错时才需要',
+    st_text: '打字模式', st_speak: '在说', st_think: '在想', st_hold: '在听你讲，不插嘴', st_live: '在听，直接说',
+    st_unfinished: '像是还没说完，再等等', st_paused: '已暂停', st_reviewing: '回顾中…', st_ended: '已结束',
+    me: '我', interrupted: '（被打断）',
+    hold_why_enter: '好，你讲，我不插嘴。说「我说完了」或停 4 秒我再回。', hold_why_timeout: '停了 4 秒，我当你说完了',
+    no_recorder: '这个浏览器不支持录音，只能打字。', mic_fail: '打不开麦克风：', asr_fail: '识别失败：', net_fail: '连不上：',
+    full_reply: ms => `全句 ${ms}ms`,
+    review_title: n => `${n} 的回顾`, review_meta: (n, t) => `${n} 句 · ${t} · 用它自己的方法论看这场对话`, review_fail: '回顾失败：',
+    dl_video: mb => `下载录像（${mb} MB，只在本机）`, again: '再来一场', me_all: '我的全部记录和综合复盘 ↗',
+  },
+  en: {
+    title: 'Call', badge_ready: 'Getting ready', badge_live: 'Live', badge_rec: 'Live · recording', badge_nocam: 'No camera', badge_ended: 'Ended',
+    cam_off: 'Camera is off', cam_open: 'Turn on camera',
+    st_ready: 'Ready', live_start: 'Tap to start', mic_title: 'Start / pause listening',
+    hold: 'Let me finish', hold_on: 'OK, your turn', hold_title: 'It only listens without replying until you say "I\'m done" or pause for 4 seconds',
+    stop: '✋ Interrupt', stop_title: 'While it\'s talking or thinking, tap here or the mic to cut in', end: 'End & review',
+    s_dur: 'Time', s_turns: 'Turns', s_asr: 'ASR', s_first: 'First token', s_sound: 'First sound',
+    hint: 'Tap the mic to start. It listens while you talk and picks up when you pause; start talking while it speaks and it stops. To say everything in one go, tap "Let me finish" or just say "don\'t interrupt".',
+    txt_ph: 'Or type here…', send: 'Send',
+    o_mode: 'Mode', m_video: 'Video', m_voice: 'Voice only', m_text: 'Text',
+    o_uid: 'I am', uid_ph: 'Your name, so it remembers you', me_link: 'My records ↗',
+    o_lang: 'Language', l_zh: 'Chinese', l_mixed: 'Mixed zh/en', o_voice: 'Voice', v_default: 'Default', v_default_mark: ' (default)',
+    o_tts: 'Read aloud', o_barge: 'Stop talking when I speak', o_rec: 'Record (this device only)', o_btts: 'Use browser voice', o_btts_title: 'Only needed if the server voice fails',
+    st_text: 'Typing mode', st_speak: 'Speaking', st_think: 'Thinking', st_hold: 'Listening, not interrupting', st_live: 'Live. Just talk.',
+    st_unfinished: 'Sounds unfinished, waiting…', st_paused: 'Paused', st_reviewing: 'Reviewing…', st_ended: 'Ended',
+    me: 'Me', interrupted: ' (interrupted)',
+    hold_why_enter: 'OK, go ahead, I won\'t interrupt. Say "I\'m done" or pause 4 seconds and I\'ll reply.', hold_why_timeout: '4 seconds of silence, so I take it you\'re done',
+    no_recorder: 'This browser can\'t record audio; typing only.', mic_fail: 'Can\'t open the microphone: ', asr_fail: 'Recognition failed: ', net_fail: 'Connection failed: ',
+    full_reply: ms => `Full reply ${ms}ms`,
+    review_title: n => `Review by ${n}`, review_meta: (n, t) => `${n} lines · ${t} · read through its own method`, review_fail: 'Review failed: ',
+    dl_video: mb => `Download recording (${mb} MB, this device only)`, again: 'Go again', me_all: 'All my records and overall review ↗',
+  },
+};
+const uiLang = () => curLang() === 'en' ? 'en' : 'zh';
+const T = (k, ...a) => { const v = I18N[uiLang()][k] ?? I18N.zh[k] ?? k; return typeof v === 'function' ? v(...a) : v; };
+const who = () => (IDENT && IDENT[uiLang()]) || (IDENT && IDENT.zh) || {name: AGENT, short: AGENT, blurb: '', initial: AGENT.slice(0, 1)};
+let stState = null, stBadge = null, hold = false;   // 当前状态/徽标的字典键，切语言时重画
+function applyI18n(){
+  const L = uiLang();
+  document.documentElement && (document.documentElement.lang = L === 'en' ? 'en' : 'zh-CN');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = T(el.dataset.i18nTitle); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = T(el.dataset.i18nPh); });
+  const w = who(); document.title = w.short + ' · ' + T('title');
+  $('#agShort').textContent = w.short; $('#agBlurb').textContent = w.blurb; $('#agAv').textContent = w.initial;
+  $('#btnHold').textContent = T(hold ? 'hold_on' : 'hold');
+  if(stState) setState(stState[0], stState[1]);
+  if(stBadge) badge(stBadge[0], stBadge[1]);
+}
 const curMode = () => pref.mode || 'video';
 const curUid = () => (pref.uid || '').trim();
 const uidHeaders = () => curUid() ? {'X-User-Id': encodeURIComponent(curUid())} : {};
@@ -135,13 +207,14 @@ function applyMode(){
   $('#cam').parentElement.hidden = (m !== 'video');
   $('#mic').style.display = (m === 'text') ? 'none' : '';
   $('#btnHold').style.display = (m === 'text') ? 'none' : '';
-  if(m === 'text') setState('', '打字模式');
+  if(m === 'text') setState('', 'st_text');
 }
 $('#mode').onchange = () => { pref.mode = $('#mode').value; savePref(); applyMode(); if(pref.mode === 'video') openCam(); };
 $('#uid').value = pref.uid || ''; $('#uid').onchange = () => { pref.uid = $('#uid').value.trim(); savePref(); };
 const SESSION = 'talk-' + AGENT + '-' + Math.random().toString(36).slice(2, 8);
 const messages = [], turns = [];
 let t0 = null, listening = false, speaking = false, busy = false, stoppedByUser = true, ended = false;
+applyI18n();
 
 // ---------------------------------------------------------------- 时钟、字幕、状态
 const clock = () => { if(t0 === null) return '0:00'; const s = Math.floor((Date.now() - t0) / 1000); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); };
@@ -149,22 +222,22 @@ setInterval(() => { if(t0 !== null && !ended) $('#sDur').textContent = clock(); 
 function line(role, text){
   $('#hint')?.remove();
   const d = document.createElement('div'); d.className = 't ' + role;
-  d.innerHTML = `<div class="av ${role==='user'?'me':''}">${role==='bot'?esc(INITIAL):'我'}</div><div class="body"><div class="name"><b>${role==='bot'?esc(NAME):'我'}</b><span>${clock()}</span></div><div class="tx">${esc(text)}</div></div>`;
+  d.innerHTML = `<div class="av ${role==='user'?'me':''}">${role==='bot'?esc(who().initial):esc(T('me'))}</div><div class="body"><div class="name"><b>${role==='bot'?esc(who().short):esc(T('me'))}</b><span>${clock()}</span></div><div class="tx">${esc(text)}</div></div>`;
   $('#log').appendChild(d); $('#log').scrollTop = $('#log').scrollHeight; return d;
 }
-function setState(kind, text){ const st = $('#st'); st.className = 'state ' + kind; st.querySelector('span').textContent = text; $('#live').textContent = text; $('#btnStop').hidden = !(kind === 'speak' || kind === 'think'); }
-function badge(kind, text){ const b = $('#badge'); b.className = 'badge ' + kind; b.querySelector('span').textContent = text; }
+function setState(kind, key){ stState = [kind, key]; const text = T(key); const st = $('#st'); st.className = 'state ' + kind; st.querySelector('span').textContent = text; $('#live').textContent = text; $('#btnStop').hidden = !(kind === 'speak' || kind === 'think'); }
+function badge(kind, key){ stBadge = [kind, key]; const b = $('#badge'); b.className = 'badge ' + kind; b.querySelector('span').textContent = T(key); }
 
 // ---------------------------------------------------------------- 摄像头 + 录像（留在本机）
 let camStream = null, vrec = null, chunks = [];
 async function openCam(){
-  try{ camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:{ideal:1280}}, audio:true}); $('#cam').srcObject = camStream; $('#camOff').hidden = true; badge('', 'Live'); }
-  catch(e){ $('#camOff').hidden = false; badge('', '没有摄像头'); }
+  try{ camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:{ideal:1280}}, audio:true}); $('#cam').srcObject = camStream; $('#camOff').hidden = true; badge('', 'badge_live'); }
+  catch(e){ $('#camOff').hidden = false; badge('', 'badge_nocam'); }
 }
 function startRec(){
   if(curMode() !== 'video' || !$('#optRec').checked || !camStream || !window.MediaRecorder) return;
   try{ vrec = new MediaRecorder(camStream, {mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : (MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : '')});
-       chunks = []; vrec.ondataavailable = e => { if(e.data.size) chunks.push(e.data); }; vrec.start(1000); badge('rec', 'Live · recording'); }
+       chunks = []; vrec.ondataavailable = e => { if(e.data.size) chunks.push(e.data); }; vrec.start(1000); badge('rec', 'badge_rec'); }
   catch(e){ vrec = null; }
 }
 function stopRec(){ return new Promise(res => { if(!vrec || vrec.state === 'inactive') return res(null); vrec.onstop = () => res(new Blob(chunks, {type: vrec.mimeType || 'video/webm'})); vrec.stop(); }); }
@@ -182,22 +255,22 @@ async function loadVoices(){
   const sel = $('#voiceSel');
   try{
     const r = await fetch('/v1/agents/' + AGENT + '/voices?lang=' + encodeURIComponent(curLang())); const d = await r.json();
-    sel.innerHTML = d.options.map(o => `<option value="${o.id}">${esc(o.name)} · ${esc(o.gender)}${o.id == d.default ? '（默认）' : ''}</option>`).join('');
+    sel.innerHTML = d.options.map(o => `<option value="${o.id}">${esc(o.name)} · ${esc(o.gender)}${o.id == d.default ? esc(T('v_default_mark')) : ''}</option>`).join('');
     const ids = d.options.map(o => String(o.id));
     if(!ids.includes(String(pref.voice))){ pref.voice = curLang() === 'en' ? String(d.options[0]?.id || '') : ''; }
     sel.value = pref.voice || String(d.default || '');
-  }catch(e){ sel.innerHTML = '<option value="">默认</option>'; }
+  }catch(e){ sel.innerHTML = '<option value="">' + esc(T('v_default')) + '</option>'; }
 }
-$('#lang').value = pref.lang; $('#lang').onchange = () => { pref.lang = $('#lang').value; pref.voice = ''; savePref(); pickVoice(); loadVoices(); };
+$('#lang').value = pref.lang; $('#lang').onchange = () => { pref.lang = $('#lang').value; pref.voice = ''; savePref(); pickVoice(); loadVoices(); applyI18n(); };
 $('#voiceSel').onchange = () => { pref.voice = $('#voiceSel').value; savePref(); };
 loadVoices();
 const useServer = () => !$('#optBrowserTts').checked && speechSupported();
 function speakBrowser(text){ return new Promise(res => { if(!synth) return res(); const u = new SpeechSynthesisUtterance(text); if(voice) u.voice = voice; u.lang = bcp(); u.rate = 1.02; u.onend = u.onerror = () => res(); synth.speak(u); }); }
-async function browserDrain(){ if(speaking) return; speaking = true; setState('speak', '在说'); if(!tSound) tSound = performance.now(); while(browserQ.length){ await speakBrowser(browserQ.shift()); } speaking = false; afterSpeak(); }
+async function browserDrain(){ if(speaking) return; speaking = true; setState('speak', 'st_speak'); if(!tSound) tSound = performance.now(); while(browserQ.length){ await speakBrowser(browserQ.shift()); } speaking = false; afterSpeak(); }
 function ensureQueue(){
   if(sq) return sq;
   sq = createSpeechQueue({ fetchAudio: pcm16PostFetcher('/v1/audio/speech/stream'), voice: curVoice() || undefined, leadSec: 0.3,
-    onStart: () => { speaking = true; setState('speak', '在说'); tSound = performance.now(); if(recorder && listening) recorder.pause(true); },
+    onStart: () => { speaking = true; setState('speak', 'st_speak'); tSound = performance.now(); if(recorder && listening) recorder.pause(true); },
     onDrain: () => { speaking = false; sq = null; afterSpeak(); } });
   return sq;
 }
@@ -210,7 +283,7 @@ function pushTts(delta, final=false){
   if(final){ if(ttsBuf.trim()) enqueue(ttsBuf.trim()); ttsBuf = ''; firstChunkDone = false; if(sq) sq.end(); }
 }
 function shutUp(){ ttsBuf = ''; browserQ = []; if(sq){ try{ sq.stop(); }catch(e){} sq = null; } if(synth && (synth.speaking || synth.pending)) synth.cancel(); speaking = false; }
-function afterSpeak(){ if(ended) return; setState(hold ? 'hold' : 'listen', hold ? '在听你讲，不插嘴' : 'Live. Just talk.'); if(!stoppedByUser && !busy && recorder){ recorder.resume(); listening = true; } }
+function afterSpeak(){ if(ended) return; setState(hold ? 'hold' : 'listen', hold ? 'st_hold' : 'st_live'); if(!stoppedByUser && !busy && recorder){ recorder.resume(); listening = true; } }
 
 // ---------------------------------------------------------------- 听：VAD 切段 → 服务器识别（腾讯）
 // 停顿不等于说完。三道保险：句尾是「呃/那个/然后」这类没说完的信号 → 多等 1.5s；
@@ -222,15 +295,22 @@ function interrupt(){
   interruptedFlag = true;
   shutUp();
   if(abortCtl){ try{ abortCtl.abort(); }catch(e){} }
-  if(curBotEl && !curBotEl.querySelector('.tx').textContent.endsWith('（被打断）')){ curBotEl.querySelector('.tx').textContent += ' （被打断）'; }
-  busy = false; setState('listen', 'Live. Just talk.');
+  if(curBotEl && !curBotEl.querySelector('.tx').textContent.endsWith(T('interrupted'))){ curBotEl.querySelector('.tx').textContent += T('interrupted'); }
+  busy = false; setState('listen', 'st_live');
   if(!stoppedByUser && recorder){ recorder.resume(); listening = true; }
 }
 $('#btnStop').onclick = interrupt;
-let hold = false, pendingText = '', pendingEl = null, pendingTimer = null, pendingWavs = [];
+let pendingText = '', pendingEl = null, pendingTimer = null, pendingWavs = [];
 const HESITATION = /(呃|嗯|啊|额|那个|这个|然后|就是|比如说|所以|但是|因为|而且|还有|我|你|他|它|是|在|的|了|把|跟|和|要|会|想|可以|现在)[，,。、]?$/;
 const ENTER_HOLD = /(别插嘴|不要插嘴|别打断|不要打断|听我说完|听我讲完|让我说完|让我讲完|我先说完|我先讲完|先别说话|等我说完|等我讲完)/;
 const EXIT_HOLD = /(我说完了|我讲完了|说完了|讲完了|你说吧|你说呢|你觉得呢|你怎么看|该你了|轮到你|到你了)[。？！?!]*$/;
+// 英文模式的最小对应：进「听我讲完」/ 退出 / 短句算说完。中英混说两套都认。
+const ENTER_HOLD_EN = /\b(let me finish|don'?t interrupt|stop interrupting|hear me out)\b/i;
+const EXIT_HOLD_EN = /\b(i'?m done|i'?m finished|that'?s all|your turn|over to you|what do you think)[.?!]*$/i;
+const COMPLETE_SHORT_EN = /^(yes|yeah|yep|no|nope|ok|okay|sure|right|thanks|thank you|bye|goodbye|hi|hello|i don'?t know)[.!?]?$/i;
+const enOn = () => curLang() !== 'zh';
+const enterHold = t => ENTER_HOLD.test(t) || (enOn() && ENTER_HOLD_EN.test(t));
+const exitHold = t => EXIT_HOLD.test(t) || (enOn() && EXIT_HOLD_EN.test(t));
 const COMPLETE_SHORT = /^(好|好的|对|对的|是|是的|不是|不知道|没有|有|嗯|行|可以|不行|不用|不要|再见|拜拜|谢谢|你好|喂)[。！？!?]?$/;
 const cleanFillers = t => t.replace(/(^|[，,。！？!?\s])(呃|嗯|额|哦|那个|这个)+[，,、]?/g, '$1').replace(/[，,]{2,}/g, '，').replace(/^[，,、\s]+/, '').trim();
 async function transcribe(wav){
@@ -248,11 +328,11 @@ function concatWav(bufs){
   let o = 44; for(const p of parts){ out.set(p, o); o += p.length; } return out.buffer;
 }
 // 「像没说完」：结尾是迟疑词/常见的话中词、逗号收尾、或太短（短片段识别本来就不准）
-const looksUnfinished = (raw, cleaned) => HESITATION.test(raw.replace(/[。！？!?]+$/, '')) || /[，,、]$/.test(raw) || (cleaned.length < 6 && !COMPLETE_SHORT.test(cleaned)) || !/[。！？!?]$/.test(raw);
+const looksUnfinished = (raw, cleaned) => HESITATION.test(raw.replace(/[。！？!?]+$/, '')) || /[，,、]$/.test(raw) || (cleaned.length < 6 && !COMPLETE_SHORT.test(cleaned) && !(enOn() && COMPLETE_SHORT_EN.test(cleaned))) || !/[。！？!?]$/.test(raw);
 function setHold(on, why){
-  hold = on; $('#btnHold').classList.toggle('on', on); $('#btnHold').textContent = on ? '好了，你说' : '听我讲完';
-  if(on){ setState('hold', '在听你讲，不插嘴'); if(why) $('#tip').textContent = why; }
-  else { setState('listen', 'Live. Just talk.'); flushPending(); }
+  hold = on; $('#btnHold').classList.toggle('on', on); $('#btnHold').textContent = T(on ? 'hold_on' : 'hold');
+  if(on){ setState('hold', 'st_hold'); if(why) $('#tip').textContent = why; }
+  else { setState('listen', 'st_live'); flushPending(); }
 }
 function flushPending(){
   clearTimeout(pendingTimer); pendingTimer = null;
@@ -270,17 +350,17 @@ async function accept(raw, cleaned, wav){
   } else { pendingText = cleaned; pendingWavs = [wav]; pendingEl = line('user', cleaned); }
   clearTimeout(pendingTimer);
   if(hold){
-    if(EXIT_HOLD.test(raw)){ setHold(false); return; }
-    pendingTimer = setTimeout(() => { if(hold) setHold(false, '停了 4 秒，我当你说完了'); }, 4000);
+    if(exitHold(raw)){ setHold(false); return; }
+    pendingTimer = setTimeout(() => { if(hold) setHold(false, T('hold_why_timeout')); }, 4000);
     return;
   }
-  if(ENTER_HOLD.test(raw)){ setHold(true, '好，你讲，我不插嘴。说「我说完了」或停 4 秒我再回。'); return; }
-  if(looksUnfinished(raw, cleaned)){ pendingTimer = setTimeout(flushPending, 1500); setState('listen', '像是还没说完，再等等'); }
+  if(enterHold(raw)){ setHold(true, T('hold_why_enter')); return; }
+  if(looksUnfinished(raw, cleaned)){ pendingTimer = setTimeout(flushPending, 1500); setState('listen', 'st_unfinished'); }
   else flushPending();
 }
 function ensureRecorder(){
   if(recorder) return recorder;
-  if(!recorderSupported()){ $('#tip').textContent = '这个浏览器不支持录音，只能打字。'; return null; }
+  if(!recorderSupported()){ $('#tip').textContent = T('no_recorder'); return null; }
   recorder = createRecorder({
     silenceMs: 800, earlyPauseMs: 300, minSpeechMs: 300, maxSegmentMs: 20000, bargeInMs: 600,
     onBargeIn: () => { if($('#optBarge').checked) interrupt(); },
@@ -291,7 +371,7 @@ function ensureRecorder(){
       const tStop = performance.now();
       const p = (meta && meta.earlyUsable && early) ? early : transcribe(wav).catch(() => null); early = null;
       let raw = '';
-      try{ raw = ((await p) || '').trim(); }catch(e){ line('user', '识别失败：' + e.message).classList.add('err'); return; }
+      try{ raw = ((await p) || '').trim(); }catch(e){ line('user', T('asr_fail') + e.message).classList.add('err'); return; }
       lastAsrMs = Math.round(performance.now() - tStop); $('#sAsr').textContent = lastAsrMs + 'ms';
       const cleaned = curLang() === 'en' ? raw : cleanFillers(raw);
       if(!raw) return;
@@ -303,10 +383,10 @@ function ensureRecorder(){
 async function startListening(){
   if(ended) return; const r = ensureRecorder(); if(!r) return;
   try{ if(!recStarted){ await r.start(); recStarted = true; } else r.resume(); }
-  catch(e){ $('#tip').textContent = '打不开麦克风：' + e.message; return; }
-  listening = true; $('#mic').className = 'r'; setState(hold ? 'hold' : 'listen', hold ? '在听你讲，不插嘴' : 'Live. Just talk.');
+  catch(e){ $('#tip').textContent = T('mic_fail') + e.message; return; }
+  listening = true; $('#mic').className = 'r'; setState(hold ? 'hold' : 'listen', hold ? 'st_hold' : 'st_live');
 }
-function pauseListening(){ stoppedByUser = true; listening = false; if(recorder) recorder.pause(); $('#mic').className = 'r off'; setState('', '已暂停'); }
+function pauseListening(){ stoppedByUser = true; listening = false; if(recorder) recorder.pause(); $('#mic').className = 'r off'; setState('', 'st_paused'); }
 $('#mic').onclick = () => {
   if(ended) return;
   if(speaking || busy){ interrupt(); return; }
@@ -319,7 +399,7 @@ $('#btnHold').onclick = () => { if(ended) return; setHold(!hold); };
 $('#f').onsubmit = (e) => { e.preventDefault(); const t = $('#txt').value.trim(); if(!t || ended) return; $('#txt').value = '';
   if(t0 === null){ t0 = Date.now(); startRec(); $('#end').disabled = false; } shutUp(); send(t, line('user', t)); };
 async function send(text, el){
-  if(busy || ended) return; busy = true; setState('think', '在想'); if(recorder && listening) recorder.pause();
+  if(busy || ended) return; busy = true; setState('think', 'st_think'); if(recorder && listening) recorder.pause();
   messages.push({role:'user', content:text}); turns.push({t: clock(), role:'user', text});
   const bel = line('bot', '…'); const tx = bel.querySelector('.tx'); let full = '', ts = performance.now(), first = null; tSound = null; const asrMs = lastAsrMs; lastAsrMs = null;
   curBotEl = bel; interruptedFlag = false; abortCtl = new AbortController();
@@ -344,33 +424,33 @@ async function send(text, el){
     const soundMs = tSound ? Math.round(tSound - ts) : null; if(soundMs) $('#sSound').textContent = soundMs + 'ms';
     messages.push({role:'assistant', content:full}); turns.push({t: clock(), role:'bot', text: full, first_ms: first, asr_ms: asrMs, sound_ms: soundMs});
     $('#sTurns').textContent = turns.filter(t => t.role === 'user').length;
-    $('#tip').textContent = `全句 ${Math.round(performance.now()-ts)}ms`;
+    $('#tip').textContent = T('full_reply', Math.round(performance.now()-ts));
   }catch(e){
     if(e.name === 'AbortError' || interruptedFlag){
       // 被打断：模型那边掐掉了，已经生成的部分当它说过的（实际念到哪句没法精确知道），标记进记录
-      messages.push({role:'assistant', content: full + '（被打断）'}); turns.push({t: clock(), role:'bot', text: full, interrupted: true, first_ms: first, asr_ms: asrMs});
+      messages.push({role:'assistant', content: full + T('interrupted')}); turns.push({t: clock(), role:'bot', text: full, interrupted: true, first_ms: first, asr_ms: asrMs});
       $('#sTurns').textContent = turns.filter(t => t.role === 'user').length;
-    } else { tx.textContent = '连不上：' + e.message; bel.classList.add('err'); messages.pop(); turns.pop(); }
+    } else { tx.textContent = T('net_fail') + e.message; bel.classList.add('err'); messages.pop(); turns.pop(); }
   }
   finally{ abortCtl = null; busy = false; if(!speaking && !sq && !browserQ.length && !interruptedFlag) afterSpeak(); }
 }
 
 // ---------------------------------------------------------------- 结束并回顾
 $('#end').onclick = async () => {
-  if(ended) return; ended = true; $('#end').disabled = true; clearTimeout(pendingTimer); pauseListening(); shutUp(); setState('', '回顾中…'); badge('', '已结束');
+  if(ended) return; ended = true; $('#end').disabled = true; clearTimeout(pendingTimer); pauseListening(); shutUp(); setState('', 'st_reviewing'); badge('', 'badge_ended');
   if(recorder){ try{ recorder.stop(); }catch(e){} }
   const blob = await stopRec(); if(camStream) camStream.getTracks().forEach(t => t.stop());
   const rv = $('#review'); rv.style.display = 'block';
-  rv.innerHTML = `<h2>${esc(NAME)} 的回顾</h2><div class="meta">${turns.length} 句 · ${clock()} · 用它自己的方法论看这场对话</div><div class="body">…</div>`;
+  rv.innerHTML = `<h2>${esc(T('review_title', who().short))}</h2><div class="meta">${esc(T('review_meta', turns.length, clock()))}</div><div class="body">…</div>`;
   try{
     const r = await fetch('/v1/agents/' + AGENT + '/review', {method:'POST', headers:{'Content-Type':'application/json', ...uidHeaders()}, body: JSON.stringify({session_id: SESSION, turns})});
-    const d = await r.json(); rv.querySelector('.body').textContent = r.ok ? d.review : ('回顾失败：' + (d.detail || r.status));
-  }catch(e){ rv.querySelector('.body').textContent = '回顾失败：' + e.message; }
+    const d = await r.json(); rv.querySelector('.body').textContent = r.ok ? d.review : (T('review_fail') + (d.detail || r.status));
+  }catch(e){ rv.querySelector('.body').textContent = T('review_fail') + e.message; }
   const acts = document.createElement('div'); acts.className = 'acts';
-  if(blob){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${AGENT}-${SESSION}.${blob.type.includes('mp4')?'mp4':'webm'}`; a.textContent = `下载录像（${(blob.size/1048576).toFixed(1)} MB，只在本机）`; acts.appendChild(a); }
-  const again = document.createElement('a'); again.href = location.pathname; again.textContent = '再来一场'; acts.appendChild(again);
-  if(curUid()){ const me = document.createElement('a'); me.href = '/me'; me.textContent = '我的全部记录和综合复盘 ↗'; acts.appendChild(me); }
-  rv.appendChild(acts); rv.scrollIntoView({behavior:'smooth'}); setState('', '已结束');
+  if(blob){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${AGENT}-${SESSION}.${blob.type.includes('mp4')?'mp4':'webm'}`; a.textContent = T('dl_video', (blob.size/1048576).toFixed(1)); acts.appendChild(a); }
+  const again = document.createElement('a'); again.href = location.pathname; again.textContent = T('again'); acts.appendChild(again);
+  if(curUid()){ const me = document.createElement('a'); me.href = '/me'; me.textContent = T('me_all'); acts.appendChild(me); }
+  rv.appendChild(acts); rv.scrollIntoView({behavior:'smooth'}); setState('', 'st_ended');
 };
 </script>
 </body>
