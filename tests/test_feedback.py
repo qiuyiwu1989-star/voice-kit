@@ -16,6 +16,14 @@ from voice_kit import agents as A
 from voice_kit import feedback as FB
 from voice_kit.tenants import hash_key
 
+# red-coach 的版本会随发布不断升级，测试不写死版本号
+_REPO = Path(__file__).parent.parent
+BASE_V = A.load_agent(_REPO / "agents" / "red-coach").version
+_maj, _min, _ = BASE_V.split(".")
+NEXT_V = f"{_maj}.{int(_min) + 1}.0"
+_suite = json.loads((_REPO / "voice_kit" / "testkit" / "suites" / "coach_no_scoring.json").read_text(encoding="utf-8"))
+SUITE_N = len(_suite["scenarios"])
+
 REPO = Path(__file__).parent.parent
 LONG = "你的客户到底是谁？他们规模多大？为什么偏偏是现在做这件事？我想先把这三件事弄清楚，再陪你往下捋这个融资故事，这样投资人听的时候才不会一头雾水。"
 SHORT = "好，先说你的客户是谁。"
@@ -107,7 +115,7 @@ def write_turns(root, agent, recs):
 
 def rec(i, user, reply, *, sid="s1", at=None, **kw):
     at = at or (datetime.now() - timedelta(hours=2) + timedelta(minutes=i)).isoformat(timespec="seconds")
-    return {"id": f"t{i:03d}", "at": at, "agent": "red-coach", "version": "2.0.2", "product": "coach",
+    return {"id": f"t{i:03d}", "at": at, "agent": "red-coach", "version": BASE_V, "product": "coach",
             "session_id": sid, "uid_hash": "h", "user": user, "reply": reply, "first_ms": kw.pop("first_ms", 900),
             "total_ms": 1500, "chars": FB._chars(reply), "input_takeover": False, "output_gated": False,
             "used_fallback": False, "truncated": None, "lang": "zh", **kw}
@@ -126,7 +134,7 @@ def test_every_turn_is_logged_with_fields_and_uid_only_hashed(app, root):
     assert t["uid_hash"] and t["uid_hash"] == FB.uid_hash("王小明")
     assert t["reply"] and t["chars"] == FB._chars(t["reply"])
     assert isinstance(t["first_ms"], int) and isinstance(t["total_ms"], int)
-    assert t["input_takeover"] is False and t["used_fallback"] is False and t["truncated"] is None
+    assert t["input_takeover"] is False and t["used_fallback"] is False and t["truncated"] is True   # RED 配了 turn_limit，假模型的长回复会被截，回流要记下来
     raw = "".join(p.read_text(encoding="utf-8") for p in (root / "_feedback" / "red-coach" / "turns").glob("*"))
     assert "王小明" not in raw and "13812345678" not in raw     # uid 明文不落盘，手机号去标识
     assert "〈手机号〉" in t["user"]
@@ -411,7 +419,7 @@ def test_evaluate_compares_old_and_new_without_polluting(app, root):
     ev = p["evaluation"]
     assert p["status"] == "evaluated" and ev["suite"] == "coach_no_scoring" and ev["n_cases"] == 2
     assert ev["old"]["cases"]["pass_rate"] == 0 and ev["new"]["cases"]["pass_rate"] == 1
-    assert ev["old"]["suite"]["n"] == 3 and ev["new"]["suite"]["pass_rate"] == ev["old"]["suite"]["pass_rate"]
+    assert ev["old"]["suite"]["n"] == SUITE_N and ev["new"]["suite"]["pass_rate"] == ev["old"]["suite"]["pass_rate"]
     assert ev["new"]["avg_chars"] < ev["old"]["avg_chars"] and ev["new"]["avg_questions"] < ev["old"]["avg_questions"]
     assert turns_on_disk(root, "red-coach") == before       # 评测不写回流
     assert not (root / "users").exists()                     # 评测不写记忆
@@ -432,7 +440,7 @@ def fake_eval(old_case, new_case, old_suite=1.0, new_suite=1.0, rev=1, n=2):
                             "suite": {"name": "coach_no_scoring", "n": 3, "n_fail": 0, "pass_rate": s, "cases": []},
                             "avg_chars": 10, "avg_questions": 1, "first_p50": 1, "first_p90": 2}
     return {"at": "x", "rev": rev, "suite": "coach_no_scoring", "n_cases": n,
-            "old": side(old_case, old_suite, "2.0.2"), "new": side(new_case, new_suite, "new")}
+            "old": side(old_case, old_suite, BASE_V), "new": side(new_case, new_suite, "new")}
 
 
 def test_publish_gate_rules():
@@ -452,14 +460,14 @@ def test_blocked_publish_and_forced_publish_is_audited(app, root):
     with pytest.raises(FB.GateBlocked) as e:
         FB.publish(root, a, p["id"])
     assert "还没评测" in e.value.reasons
-    assert ag(root).version == "2.0.2"
+    assert ag(root).version == BASE_V
     c = admin(app)
     url = f"/admin/feedback/api/agents/red-coach/proposals/{p['id']}/publish"
     r = c.post(url, json={})
     assert r.status_code == 409 and "还没评测" in r.json()["detail"]["reasons"]
     assert c.post(url, json={"force": True}).status_code == 400       # 没勾「我确认要发布」
     r = c.post(url, json={"force": True, "confirm": "我确认要发布", "note": "老板说先上"})
-    assert r.status_code == 200 and r.json()["forced"] is True and r.json()["published_version"] == "2.1.0"
+    assert r.status_code == 200 and r.json()["forced"] is True and r.json()["published_version"] == NEXT_V
     au = FB.load_audit(root, "red-coach")[0]
     assert au["action"] == "force_publish" and au["detail"]["note"] == "老板说先上" and au["detail"]["gate_reasons"]
     assert "强制发布" in (root / "red-coach" / "CHANGELOG.md").read_text(encoding="utf-8")
@@ -471,25 +479,25 @@ def test_publish_bumps_minor_writes_changelog_and_rollback_restores(app, root):
     orig_m = yaml.safe_load((root / "red-coach" / "manifest.yaml").read_text(encoding="utf-8"))
     FB.evaluate(root, a, p["id"], llm=app.state.fake)
     res = FB.publish(root, ag(root), p["id"])
-    assert res["status"] == "published" and res["from_version"] == "2.0.2" and res["published_version"] == "2.1.0"
+    assert res["status"] == "published" and res["from_version"] == BASE_V and res["published_version"] == NEXT_V
     assert res["commit"] is None                            # 自动提交开关默认关
     now = ag(root)
-    assert now.version == "2.1.0" and "【短答】" in now.texts["playbook.md"]
+    assert now.version == NEXT_V and "【短答】" in now.texts["playbook.md"]
     m = now.manifest
     for k in ("id", "rails", "read_level", "kind", "audience", "shells"):
         assert m.get(k) == orig_m.get(k)
     assert not [i for i in A.validate(now) if i.severity == "fail"]
     log = (root / "red-coach" / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "v2.1.0" in log and "s1" in log and "用例集通过率 0% → 100%" in log and "coach_no_scoring" in log
+    assert "v" + NEXT_V in log and "s1" in log and "用例集通过率 0% → 100%" in log and "coach_no_scoring" in log
     assert FB.load_audit(root, "red-coach")[0]["action"] == "publish"
     assert not FB.publish_gate(FB.load_proposal(root, "red-coach", p["id"]))["ok"]   # 发过的不能再发
 
     rb = FB.rollback(root, ag(root), p["id"], note="线上变差")
     back = ag(root)
-    assert rb["status"] == "rolled_back" and back.version == "2.1.1"
+    assert rb["status"] == "rolled_back" and back.version == NEXT_V[:-1] + "1"   # 回滚升 patch
     assert back.texts["playbook.md"] == orig["playbook.md"] and back.texts["persona.md"] == orig["persona.md"]
     assert FB.load_audit(root, "red-coach")[0]["action"] == "rollback"
-    assert "v2.1.1" in (root / "red-coach" / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "v" + NEXT_V[:-1] + "1" in (root / "red-coach" / "CHANGELOG.md").read_text(encoding="utf-8")
     with pytest.raises(ValueError):
         FB.rollback(root, back, p["id"])
 
@@ -544,10 +552,10 @@ def test_feedback_admin_end_to_end(app, root):
     assert pe["gate"]["ok"] is True
     n_before = len(turns_on_disk(root, "red-coach"))
     pub = c.post(f"/admin/feedback/api/agents/red-coach/proposals/{p['id']}/publish", json={}).json()
-    assert pub["published_version"] == "2.1.0"
+    assert pub["published_version"] == NEXT_V
     assert len(turns_on_disk(root, "red-coach")) == n_before
     d = c.get("/admin/feedback/api/agents/red-coach").json()
-    assert d["version"] == "2.1.0" and d["audit"][0]["action"] == "publish" and "v2.1.0" in d["changelog"]
+    assert d["version"] == NEXT_V and d["audit"][0]["action"] == "publish" and "v" + NEXT_V in d["changelog"]
     rb = c.post(f"/admin/feedback/api/agents/red-coach/proposals/{p['id']}/rollback", json={"note": "x"}).json()
     assert rb["status"] == "rolled_back"
 

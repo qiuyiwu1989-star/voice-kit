@@ -874,7 +874,8 @@ class AgentTarget:
             if self.asm["output_rules"] else None
 
     def turn(self, messages, *, headers=None, body_extra=None):
-        from .service import _strip_stage, by_sentence
+        from .service import _strip_stage, by_sentence, _hint_rewriter
+        from .gate import limit_turn
         from .testkit.target import TurnResult
         t0 = time.perf_counter()
         text, first = "", None
@@ -888,8 +889,15 @@ class AgentTarget:
                     toks = self.llm.stream(messages, system=self.asm["system_prompt"], model=self.asm["model"],
                                            thinking=False, cache_key=f"eval-{self.ag.id}", max_tokens=1024,
                                            reasoning_effort=self.asm.get("reasoning_effort"))
+                    # 和线上一致：打分命中走重写（rails 有 rewrite_hint 时），一轮长度按 turn_limit 截断。
+                    # 少了这两步，评测量到的就不是用户实际听到的（2026-09-16 合并 red-shape 时发现）。
+                    if self.out_gate and self.asm.get("rewrite_hint"):
+                        self.out_gate.rewriter = _hint_rewriter(self.llm, messages, system=self.asm["system_prompt"],
+                                                                hint=self.asm["rewrite_hint"], model=self.asm["model"],
+                                                                cache_key=f"eval-{self.ag.id}")
                     sents = (_strip_stage(ev["text"]) for ev in self.out_gate.filter(by_sentence(toks), low_latency=True)) \
                         if self.out_gate else (_strip_stage(t) for t in by_sentence(toks))
+                    sents = limit_turn(sents, self.asm.get("turn_limit"), user, upstream=(toks,))
                     for s in sents:
                         if s:
                             if first is None:

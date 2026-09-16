@@ -584,6 +584,8 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             out_gate.rewriter = _hint_rewriter(llm, messages, system=asm["system_prompt"],
                                                hint=asm.get("rewrite_hint", ""), model=model, cache_key=cache_key)
 
+        turn_meta: dict = {}
+
         def stream():
             if in_gate:
                 rule, _m = in_gate.check(user_text)
@@ -601,7 +603,10 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             sents = (_strip_stage(ev["text"]) for ev in out_gate.filter(by_sentence(toks), low_latency=True)) \
                 if out_gate else (_strip_stage(t) for t in by_sentence(toks))
             # 一轮最多说多少（manifest.turn_limit）：句子边界截断并关掉上游。没配置就原样透传。
-            sents = limit_turn(sents, asm.get("turn_limit"), user_text, upstream=(toks,), on_cut=_log_turn_cut(ag.id))
+            _cut = _log_turn_cut(ag.id)
+            def on_cut(n, c):
+                _cut(n, c); turn_meta["truncated"] = True   # 交给回流采集：这一轮被截过
+            sents = limit_turn(sents, asm.get("turn_limit"), user_text, upstream=(toks,), on_cut=on_cut)
             for text in sents:
                 if text:
                     yield _sse(_chunk(cid, model, text))
@@ -609,7 +614,7 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             yield b"data: [DONE]\n\n"
 
         stream = FB.tap_stream(stream, _agents_root(), ag, asm, request=request, user_text=user_text, uid=uid,  # 回流采集钩子
-                               lang=lang, product=_mem_product(request, authorization))
+                               lang=lang, product=_mem_product(request, authorization), meta=turn_meta)
         return StreamingResponse(stream(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
