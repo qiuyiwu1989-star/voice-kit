@@ -193,7 +193,10 @@ class Agent:
                 "archetype": self.manifest.get("archetype", ""),
                 "model": self.manifest.get("model"),
                 "mode": self.manifest.get("mode") or "video",
-                "blurb": self.manifest.get("blurb") or ""}
+                "blurb": self.manifest.get("blurb") or "",
+                # 这个 agent 服务宿主产品的哪些「壳」。REP 靠它把 slug 解析成 agent，
+                # 不用在自己库里加列（spec 009 §4 原来打算加 Shell.agentId，这样就不用了）
+                "shells": list(self.manifest.get("shells") or [])}
 
 
 # ---------------------------------------------------------------- 读
@@ -286,6 +289,8 @@ def validate(ag: Agent, *, author_level: str = "L0") -> List[Issue]:
 
     if m.get("run") not in (None, "local", "upstream"):
         out.append(Issue("manifest.yaml", "run 只能是 local / upstream（不填 = 代码级走上游）"))
+    if m.get("shells") is not None and not isinstance(m.get("shells"), list):
+        out.append(Issue("manifest.yaml", "shells 要是一个列表（宿主产品的壳标识）"))
     if m.get("mode") not in (None, "video", "voice", "text"):
         out.append(Issue("manifest.yaml", "mode 只能是 video / voice / text"))
 

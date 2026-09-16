@@ -443,7 +443,10 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
 
     @app.get("/v1/agents")
     def list_agents(request: Request, authorization: str = Header(None)):
-        if not _admin_authed(request):
+        """注册表清单。**用户门票也认** —— `/talk` 首页给持票人列的就是这一份，
+        两个口径不一样的话，宿主产品（AI 教练的 Agent 中心）会拿到 401 然后
+        静默退成空表，页面上表现为「只有一个 agent」，而错因在鉴权（2026-09-16 踩到）。"""
+        if not (_admin_authed(request) or _ui_authed(request)):
             who(authorization)
         return {"agents": [a.summary() for a in AG.load_all(_agents_root())]}
 

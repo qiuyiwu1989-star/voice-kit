@@ -4,11 +4,13 @@ version: 0.1.0
 kind: config
 status: draft
 blurb: 有什么不顺心的，跟我说
-archetype: 服务人员
+archetype: 陪练对手
 audience:
-  product: kehu-demo
+  product: coach
   bands: [adult]
 mode: video   # 用户端默认：video / voice / text，页面上可切
+shells:   # 这个 agent 服务 AI 教练的哪些壳（真源在这里，REP 不加列不迁移）
+  - kefu-xiaoan
 read_level: L2
 model: deepseek-v4-flash
 rails: adult_basic

@@ -105,10 +105,11 @@ def test_agent_chat_streams_with_assembled_prompt(app):
 
 
 def test_agent_chat_auth_admin_or_product_tenant(app):
+    """钥匙认产品。三件套 2026-09-16 归到 coach 名下（它们是 AI 教练的陪练对手）。"""
     c = TestClient(app)
     assert chat(c, "guwen-axun", "hi").status_code == 401
-    assert chat(c, "guwen-axun", "hi", Authorization="Bearer coach-key").status_code == 401   # 别的产品的钥匙
-    assert chat(c, "guwen-axun", "hi", Authorization="Bearer kehu-key").status_code == 200
+    assert chat(c, "guwen-axun", "hi", Authorization="Bearer kehu-key").status_code == 401   # 别的产品的钥匙
+    assert chat(c, "guwen-axun", "hi", Authorization="Bearer coach-key").status_code == 200
     assert chat(c, "nope", "hi", Authorization="Bearer door").status_code == 404
 
 
@@ -335,3 +336,37 @@ def test_talk_and_me_pages_define_helpers_before_use():
         body = src[src.index("<script"):]
         assert body.index("const $ =") < body.index("$('#"), name
         assert body.index("const esc =") < body.index("esc("), name
+
+
+def test_shells_binding_is_declared_by_the_agent():
+    """壳 → agent 的绑定在人设库里，不在宿主产品的数据库里（spec 009 §4 改法）。"""
+    red = A.load_agent(REPO / "agents" / "red-coach")
+    assert red.summary()["shells"] == ["founder-pitch", "sarah-chen"]
+    assert not [i for i in A.validate(red) if i.severity == "fail"]
+    # 一个壳只能被一个 agent 认领，否则 REP 那边解析出来是随机的
+    owners = {}
+    for a in A.load_all(REPO / "agents"):
+        for sh in a.summary()["shells"]:
+            assert sh not in owners, f"壳 {sh} 被 {owners.get(sh)} 和 {a.id} 同时认领"
+            owners[sh] = a.id
+    assert owners["founder-pitch"] == "red-coach" and owners["guwen-axun"] == "guwen-axun"
+
+
+def test_shells_must_be_a_list(root):
+    import yaml
+    p = root / "red-coach" / "manifest.yaml"
+    m = yaml.safe_load(p.read_text(encoding="utf-8")); m["shells"] = "founder-pitch"
+    p.write_text(yaml.safe_dump(m, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    assert any("shells 要是一个列表" in i.message for i in A.validate(A.load_agent(root / "red-coach")))
+
+
+def test_agents_list_accepts_ui_ticket(app, monkeypatch):
+    """宿主产品拿的是用户门票。不认的话它会静默退成空表——页面上看着像「只有一个 agent」，
+    而错因在鉴权（2026-09-16：AI 教练的 Agent 中心只出了一张卡）。"""
+    monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
+    c = TestClient(app)
+    assert c.get("/v1/agents").status_code == 401
+    r = c.get("/v1/agents", cookies={"vk_ui": "go"})
+    assert r.status_code == 200
+    ids = {a["id"] for a in r.json()["agents"]}
+    assert "red-coach" in ids and "guwen-axun" in ids

@@ -8,6 +8,9 @@ audience:
   product: coach
   bands: [adult]
 mode: voice   # 用户端默认：video / voice / text，页面上可切
+shells:   # 这个 agent 服务 AI 教练的哪些壳（真源在这里，REP 不加列不迁移）
+  - founder-pitch
+  - sarah-chen
 read_level: L0
 rails: no_scoring
 voice: coach
