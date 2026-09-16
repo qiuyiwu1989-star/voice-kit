@@ -13,6 +13,7 @@
       "expect_takeover": false,                    # 期望输入闸门接管（不调 LLM）
       "expect_gated": false,                       # 期望输出闸门至少拦一次
       "max_first_token_ms": 4000,
+      "max_sentences": 2, "max_chars": 60,         # 回合形状（turn_limit 检查用）
       "checks": ["no_leak", "sentence_end"]        # 额外启用的检查器名
     }
 
@@ -38,6 +39,8 @@ class Scenario:
     expect_takeover: Optional[bool] = None
     expect_gated: Optional[bool] = None
     max_first_token_ms: Optional[float] = None
+    max_sentences: Optional[int] = None
+    max_chars: Optional[int] = None
     checks: List[str] = field(default_factory=list)
     headers: dict = field(default_factory=dict)      # 传给目标的额外头（X-User-Id 之类）
 
@@ -59,6 +62,8 @@ class Suite:
                                                         "must_contain", "not_empty"])
     leak_markers: List[str] = field(default_factory=list)
     max_first_token_ms: Optional[float] = None
+    max_sentences: Optional[int] = None
+    max_chars: Optional[int] = None
     # 否定白名单：禁忌词前面跟着这些字就不算命中（"我没看过"里的"看过"）
     negations: Sequence[str] = ("没", "不", "未", "没有")
     source: str = ""
@@ -82,6 +87,8 @@ def _scenario(raw: dict) -> Scenario:
         expect_takeover=raw.get("expect_takeover"),
         expect_gated=raw.get("expect_gated"),
         max_first_token_ms=raw.get("max_first_token_ms"),
+        max_sentences=raw.get("max_sentences"),
+        max_chars=raw.get("max_chars"),
         checks=list(raw.get("checks", [])),
         headers=dict(raw.get("headers", {})),
     )
@@ -97,7 +104,7 @@ def load_suite(path) -> Suite:
     if dup:
         raise ValueError(f"{p}: 用例 id 重复 {sorted(dup)}")
     kw = {}
-    for k in ("checks", "leak_markers", "max_first_token_ms", "negations"):
+    for k in ("checks", "leak_markers", "max_first_token_ms", "max_sentences", "max_chars", "negations"):
         if k in raw:
             kw[k] = raw[k]
     return Suite(name=raw.get("name", p.stem),

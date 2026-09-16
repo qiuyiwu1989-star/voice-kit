@@ -115,7 +115,11 @@ RAILS_RULES: Dict[str, dict] = {
                           "patterns": [r"\d+\s*分(?![钟钱之])", r"(你|讲得|表达|表现|这一遍).{0,8}(提升|进步|退步|下降|达到|完成度|得分).{0,4}\d+\s*(%|％)",
                                        r"[A-D][+-]?\s*(级|档)"]}],
         "input_rules": [],
-        "fallback_reply": "这个我不用数字说，我直接说哪一页没落地。",
+        # 2026-09-16：原来是「这个我不用数字说，我直接说哪一页没落地。」——老状态机时代的话。
+        # RED 2.0 不许报页码，而且说完就结束、答非所问（线上两场一字不差）。
+        # 现在打分命中先按 rewrite_hint 重写一次，重写也不过才用这句；它要能独立成立、不提页码。
+        "fallback_reply": "分数我不给。你把开头再讲一遍，我告诉你最该改的是哪一句。",
+        "rewrite_hint": "对方要分数，不给分数，改为直接说最该改的一处，一两句。不出现任何数字、分数、等级，不提页码。",
         "takeover_reply": "",
     },
     "adult_basic": {
@@ -142,6 +146,8 @@ def rails_rules(rails: str) -> dict:
     return {"output_rules": mk(raw.get("output_rules") or []),
             "input_rules": mk(raw.get("input_rules") or []),
             "fallback_reply": raw.get("fallback_reply", ""),
+            # 输出闸门命中后，给重写那次调用追加的一句指令。空 = 不重写，直接兜底（其他档位维持原样）。
+            "rewrite_hint": raw.get("rewrite_hint", ""),
             "takeover_reply": raw.get("takeover_reply") or raw.get("fallback_reply", "")}
 
 
@@ -162,8 +168,44 @@ def assemble(ag: "Agent") -> dict:
         parts.append(f"# 平台底线（由系统闸门执行，你只需知道）\n{r['desc']}。违反的句子不会被送出，会被替换成兜底话。")
     parts.append("# 输出要求\n口语、短句、一次只说一件事。不要输出任何括号内的动作描写或内部标记。")
     return {"system_prompt": "\n\n".join(parts), **rails_rules(ag.rails),
+            "turn_limit": turn_limit(ag.manifest),
             "model": str(ag.manifest.get("model") or DEFAULT_MODEL),
             "reasoning_effort": ag.manifest.get("reasoning_effort")}
+
+
+# manifest.turn_limit：一轮最多说几句、几个字。可选，没写就不限。
+TURN_LIMIT_KEYS = {"sentences": 20, "chars": 1000, "feedback_sentences": 20, "feedback_chars": 1000}   # 键 → 上限
+
+
+def turn_limit_issues(raw) -> List[str]:
+    if raw is None:
+        return []
+    if not isinstance(raw, dict):
+        return ["turn_limit 要是映射，比如 {sentences: 2, chars: 60}"]
+    out = []
+    unknown = set(raw) - set(TURN_LIMIT_KEYS)
+    if unknown:
+        out.append(f"turn_limit 有未知键 {sorted(unknown)}，可选 {sorted(TURN_LIMIT_KEYS)}")
+    for k in ("sentences", "chars"):
+        if k not in raw:
+            out.append(f"turn_limit 缺 {k}")
+    for k, cap in TURN_LIMIT_KEYS.items():
+        if k not in raw:
+            continue
+        v = raw[k]
+        if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= cap:
+            out.append(f"turn_limit.{k} 要是 1–{cap} 的整数，现在是 {v!r}")
+    return out
+
+
+def turn_limit(manifest: dict):
+    """manifest → gate.TurnLimit；没写或写错都返回 None（写错由 validate 拦成 fail）。"""
+    from .gate import TurnLimit
+    raw = manifest.get("turn_limit")
+    if raw is None or turn_limit_issues(raw):
+        return None
+    kw = {k: raw[k] for k in TURN_LIMIT_KEYS if k in raw}
+    return TurnLimit(**kw)
 
 
 # 松绑措辞：出现在人格/策略里就是想绕闸门。逐字比对 + 几个正则。
@@ -381,6 +423,8 @@ def validate(ag: Agent, *, author_level: str = "L0",
     if isinstance(ne, str) and ne.strip() and ("·" in str(m.get("name") or "")) != ("·" in ne):
         out.append(Issue("manifest.yaml", "name 和 name_en 要么都用「名字 · 类型」，要么都不用——"
                                           "对话里按「·」截短名", "warn"))
+    for msg in turn_limit_issues(m.get("turn_limit")):
+        out.append(Issue("manifest.yaml", msg))
     if m.get("mode") not in (None, "video", "voice", "text"):
         out.append(Issue("manifest.yaml", "mode 只能是 video / voice / text"))
 

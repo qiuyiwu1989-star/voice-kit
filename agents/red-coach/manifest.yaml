@@ -1,7 +1,7 @@
 id: red-coach
 name: RED 融资叙事教练
 short_name: RED
-version: 2.0.2
+version: 2.1.0
 kind: config
 status: production
 archetype: 教练
@@ -16,6 +16,8 @@ shells:   # 这个 agent 服务 AI 教练的哪些壳（真源在这里，REP �
 read_level: L0
 rails: no_scoring
 model: deepseek-v4-flash
+# 一轮最多说几句、几个字，由平台在句子边界截断（不靠提示词）。对方明确要意见时放宽到 feedback_*。
+turn_limit: {sentences: 2, chars: 60, feedback_sentences: 4, feedback_chars: 160}
 voice: 501003   # 用户 2026-09 选定的男声
 layers: [persona.md, method.md, playbook.md]
 updated_at: 2026-09-16
@@ -24,3 +26,6 @@ notes: >-
   通话里的话由判据表和模板挑出来，用户反馈「死板、像只在听我讲」。
   现在和大成一样由模型按这三份文件现想，每一轮都回话。九页判据仍在 REP，只用于通话结束后的复盘。
   要退回旧行为：kind 改回 code 并恢复 upstream（备份在 red-coach.bak-*）。
+  2.1.0（2026-09-16）线上实测两场：开场 8 次里 7 次一口气问两个问题——原因是开场一节自己要求问「什么项目」
+  和「讲给谁听」，和「一次只问一个问题」打架，改成开场只问项目。普通回合 10 次里 7 次超过 40 字，
+  提示词管不住，加 turn_limit 由平台截断。

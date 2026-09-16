@@ -89,6 +89,25 @@ def sentence_end(sc, su, r) -> List[Finding]:
     return []
 
 
+_SENTS = re.compile(r"[^。！？!?\n]*[。！？!?\n]+|[^。！？!?\n]+$")
+
+
+def turn_limit(sc, su, r) -> List[Finding]:
+    """回合形状：一轮说了几句、几个字。上限用例级优先、套件级其次；都没给就不查。
+    对应 manifest.turn_limit——服务端在句子边界截断，所以超了说明截断没生效
+    （或者第一句本身就超长：服务端宁可一句偏长也不截半句，这里照实报）。"""
+    max_s = sc.max_sentences if sc.max_sentences is not None else su.max_sentences
+    max_c = sc.max_chars if sc.max_chars is not None else su.max_chars
+    t = r.text.strip()
+    out = []
+    n_s = len([s for s in _SENTS.findall(t) if s.strip()])
+    if max_s is not None and n_s > max_s:
+        out.append(Finding("turn_limit", f"说了 {n_s} 句 > 上限 {max_s}"))
+    if max_c is not None and len(t) > max_c:
+        out.append(Finding("turn_limit", f"说了 {len(t)} 字 > 上限 {max_c}"))
+    return out
+
+
 # ---------------------------------------------------------------- 闸门行为
 
 def takeover(sc, su, r) -> List[Finding]:
@@ -158,6 +177,7 @@ CHECKS: Dict[str, Callable[[Scenario, Suite, TurnResult], List[Finding]]] = {
     "no_leak": no_leak,
     "first_token_budget": first_token_budget,
     "sentence_end": sentence_end,
+    "turn_limit": turn_limit,
     "takeover": takeover,
     "gated": gated,
     "no_scoring": no_scoring,

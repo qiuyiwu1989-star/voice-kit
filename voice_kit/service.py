@@ -39,7 +39,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 import re
 
-from .gate import InputGate, OutputGate
+from .gate import InputGate, OutputGate, limit_turn
 from .openai_server import _chunk, _sse
 from .tenants import Registry, Tenant
 from . import hotwords as HW
@@ -124,6 +124,34 @@ def by_sentence(tokens):
             buf = buf[m.end():]
     if buf.strip():
         yield buf
+
+
+def _hint_rewriter(llm, messages, *, system: str, hint: str, model: str, cache_key: str):
+    """输出闸门命中后的补救：带一句追加指令再调一次模型，拿整段文本回来（闸门会再查一遍）。
+
+    hint 为空 = 这个档位不重写，返回 None，闸门直接用兜底句（球球/听众等维持原行为）。
+    只在命中时才会被调用，所以多出来的那次模型调用不影响普通回合。
+    """
+    if not hint:
+        return None
+
+    def rewrite(_text, _violation):
+        try:
+            toks = llm.stream(messages, system=system + "\n\n# 这一轮要重说\n" + hint, model=model,
+                              thinking=False, cache_key=cache_key, max_tokens=200)
+            out = _strip_stage("".join(toks)).strip()
+            return out or None
+        except Exception as e:
+            print(f"[agent] 重写失败，走兜底: {e}", flush=True)
+            return None
+    return rewrite
+
+
+def _log_turn_cut(agent_id: str):
+    def on_cut(sentences: int, chars: int):
+        # 给数据回流线用：哪个 agent、截在第几句、已发多少字。不进 SSE。
+        print(f"[agent/{agent_id}] turn_limit 截断: 已发 {sentences} 句 {chars} 字", flush=True)
+    return on_cut
 
 
 def _need(name: str) -> str:
@@ -551,6 +579,9 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
         # 前缀缓存的 key 按 agent 不按会话：同一个 agent 的 system prompt 每轮一字不变，
         # 跨会话共享前缀才有命中；X-Session-ID 只用来把同一场路由到同一台推理机。
         cache_key = body.get("prompt_cache_key") or f"agent-{agent_id}"
+        if out_gate:   # 命中后先按档位的 rewrite_hint 重写一次，重写仍违规/出错才兜底
+            out_gate.rewriter = _hint_rewriter(llm, messages, system=asm["system_prompt"],
+                                               hint=asm.get("rewrite_hint", ""), model=model, cache_key=cache_key)
 
         def stream():
             if in_gate:
@@ -568,6 +599,8 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
             # 按句剥，剥完还剩字才下发。TRTC 那边对应 FilterBracketsContent。
             sents = (_strip_stage(ev["text"]) for ev in out_gate.filter(by_sentence(toks), low_latency=True)) \
                 if out_gate else (_strip_stage(t) for t in by_sentence(toks))
+            # 一轮最多说多少（manifest.turn_limit）：句子边界截断并关掉上游。没配置就原样透传。
+            sents = limit_turn(sents, asm.get("turn_limit"), user_text, upstream=(toks,), on_cut=_log_turn_cut(ag.id))
             for text in sents:
                 if text:
                     yield _sse(_chunk(cid, model, text))

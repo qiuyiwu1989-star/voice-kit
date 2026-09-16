@@ -169,3 +169,84 @@ class InputGate:
                 if m:
                     return rule.name, m.group(0)
         return None, None
+
+
+# ---------------------------------------------------------------- 回合形状：一轮最多说多少
+#
+# 为什么在系统层卡，不靠提示词（2026-09-16 RED 2.0.1 线上实测）：
+# playbook 写了「平时只说一句，最多两句，一共不超过四十个字」，普通回合 10 次里 7 次超过 40 字，
+# 最长 153 字。视频通话里这就是「教练一开口停不下来」。提示词是建议，这里是上限。
+
+@dataclass
+class TurnLimit:
+    """一轮回复的上限。feedback_* 是对方明确要意见时放宽后的上限。"""
+    sentences: int
+    chars: int
+    feedback_sentences: int = 4
+    feedback_chars: int = 160
+
+    def pick(self, user_text: str) -> tuple[int, int]:
+        if wants_feedback(user_text):
+            return max(self.sentences, self.feedback_sentences), max(self.chars, self.feedback_chars)
+        return self.sentences, self.chars
+
+
+# 对方在要完整反馈：只看这一句。宁少勿多——漏判的代价是这一轮短一点，
+# 误判的代价是又回到「一开口停不下来」。
+_FEEDBACK_WORDS = ("你觉得", "怎么样", "意见", "评价", "点评", "反馈", "建议", "怎么改", "改进",
+                   "讲完了", "说完了", "问题在哪", "哪里不好", "what do you think", "feedback",
+                   "how can i improve", "i'm done", "i am done")
+
+
+def wants_feedback(user_text: str) -> bool:
+    t = (user_text or "").lower()
+    return any(w in t for w in _FEEDBACK_WORDS)
+
+
+_SENT_SPLIT = re.compile(r"[^。！？!?\n]*[。！？!?\n]+|[^。！？!?\n]+$")
+
+
+def _split_sentences(text: str) -> list[str]:
+    return [s for s in _SENT_SPLIT.findall(text) if s]
+
+
+def limit_turn(texts: Iterator[str], limit: Optional[TurnLimit], user_text: str = "", *,
+               upstream: Sequence[object] = (), on_cut: Optional[Callable[[int, int], None]] = None):
+    """在句子边界把一轮回复截在上限内。limit 为 None 时原样透传。
+
+    - 第一句总是发（宁可一句偏长，也不截半句）；之后的句子要「句数没到顶且加上它不超字数」才发。
+    - 到顶就停：关掉 texts 和 upstream 里每个生成器（关上游 = 不再消费模型流，省 token）。
+    - on_cut(已发句数, 已发字数)：只在真的丢了内容或提前停下时调一次，给日志用。
+    """
+    if limit is None:
+        yield from texts
+        return
+    max_s, max_c = limit.pick(user_text)
+    sent, chars, cut = 0, 0, False
+    try:
+        for text in texts:
+            for s in _split_sentences(text):
+                n = len(s.strip())
+                if not n:
+                    continue
+                if sent and (sent >= max_s or chars + n > max_c):
+                    cut = True
+                    break
+                yield s
+                sent, chars = sent + 1, chars + n
+            if cut:
+                break
+            if sent >= max_s or chars >= max_c:
+                cut = True
+                break
+    finally:
+        if cut:
+            for g in (texts, *upstream):
+                close = getattr(g, "close", None)
+                if close:
+                    try:
+                        close()
+                    except Exception:
+                        pass
+            if on_cut:
+                on_cut(sent, chars)

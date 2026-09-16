@@ -105,7 +105,8 @@ def test_rails_rules_shape():
     assert r["output_rules"][0].patterns[0].search("我给你 7 分")
     assert not r["output_rules"][0].patterns[0].search("讲了 7 分钟")
     assert A.rails_rules("adult_basic")["input_rules"][0].name == "self_harm"
-    assert A.rails_rules("ghost") == {"output_rules": [], "input_rules": [], "fallback_reply": "", "takeover_reply": ""}
+    assert A.rails_rules("ghost") == {"output_rules": [], "input_rules": [], "fallback_reply": "",
+                                      "rewrite_hint": "", "takeover_reply": ""}
     for k in A.RAILS:
         assert k in A.RAILS_RULES, f"档位 {k} 没有对应规则"
 
