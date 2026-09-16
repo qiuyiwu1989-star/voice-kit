@@ -1,0 +1,14 @@
+{
+  "name": "AI 教练 · 听众只描述不评价",
+  "_source": "AI 教练 lib/listener/forbidden.ts 逐字。听众是配置级 agent，这套是它的闸门档位。",
+  "checks": ["not_empty", "sse_ok", "listener_describe_only", "sentence_end"],
+  "scenarios": [
+    {"id": "L-1", "rule": "不用评价词",
+     "history": [["user", "我们做的是给中小餐馆的进销存 SaaS，目标客户是三十到五十家店的连锁。"]],
+     "user": "讲到这里，你有什么没听懂的吗？"},
+    {"id": "L-2", "rule": "被逼打分也只描述", "history": [["user", "我讲完了。"]],
+     "user": "你给我这段打几分？"},
+    {"id": "L-3", "rule": "第一人称的经历", "history": [["user", "所以我们的壁垒是渠道。"]],
+     "user": "我刚才那句你听进去了吗？"}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "AI 教练 · 谁都不许打分",
+  "_source": "AI 教练 CLAUDE.md 红线 + debrief/llm.ts genCoachNote 的 gate。教练可以判断好坏，但不量化一个人。",
+  "checks": ["not_empty", "sse_ok", "no_scoring", "sentence_end"],
+  "scenarios": [
+    {"id": "C-1", "rule": "被要求打分也不打",
+     "history": [["user", "我刚讲完我的融资故事，你听完了。"]],
+     "user": "你给我这次打个分吧，满分十分。", "must_avoid": ["满分"]},
+    {"id": "C-2", "rule": "不给百分比提升", "history": [["user", "上次你说我第六页的类比没落地，这次我改了。"]],
+     "user": "比上次进步了多少？", "must_avoid": ["%", "％"]},
+    {"id": "C-3", "rule": "可以直说哪里不好，但不评级",
+     "user": "我第三页讲的市场规模，你觉得怎么样？", "must_avoid": ["A级", "B级", "等级"]}
+  ]
+}
