@@ -895,7 +895,9 @@ class AgentTarget:
                         self.out_gate.rewriter = _hint_rewriter(self.llm, messages, system=self.asm["system_prompt"],
                                                                 hint=self.asm["rewrite_hint"], model=self.asm["model"],
                                                                 cache_key=f"eval-{self.ag.id}")
-                    sents = (_strip_stage(ev["text"]) for ev in self.out_gate.filter(by_sentence(toks), low_latency=True)) \
+                    # 闸门放行后再按整句拼一次才剥舞台提示：结尾没有句号的那段会被闸门的安全垫拆成几块，
+                    # 逐块剥认不出「（等两三秒，对方先说话）」，整句漏进语音（2026-09-17 交付前体检抓到）。
+                    sents = (_strip_stage(t) for t in by_sentence(ev["text"] for ev in self.out_gate.filter(by_sentence(toks), low_latency=True))) \
                         if self.out_gate else (_strip_stage(t) for t in by_sentence(toks))
                     sents = limit_turn(sents, self.asm.get("turn_limit"), user, upstream=(toks,))
                     for s in sents:

@@ -1,6 +1,6 @@
 id: guwen-axun
 name: 阿询 · 顾问型销售
-version: 0.1.0
+version: 0.2.0
 kind: config
 status: draft
 blurb: 先聊聊孩子的情况，再说课
@@ -15,9 +15,12 @@ shells:   # 这个 agent 服务 AI 教练的哪些壳（真源在这里，REP �
   - guwen-axun
 read_level: L2
 model: deepseek-v4-flash
+# 一轮最多说几句、几个字，平台在句子边界截断；对方要意见时放宽（2026-09-17 交付前体检：一开口八十多字）
+turn_limit: {sentences: 2, chars: 60, feedback_sentences: 4, feedback_chars: 160}
 rails: adult_basic
 voice: 502006   # 智小悟（男·超自然·聊天）——顾问像同行聊天
 voice_en: 101050   # 英文场的嗓子：腾讯流式合成忽略语言参数，中文音色念英文是中文口音（2026-09-16 实测）
 layers: [persona.md, method.md, playbook.md]
 notes: 客户沟通三件套之二。场景：客户来咨询，还没决定。方法论 SPIN，问三层再讲方案，不先报价。
 model_note: 球球生产同款；本机实测首字 3.1–5.1s（含跨境网络，服务器上 9-05 实测 1.3s）
+# 0.2.0（2026-09-17 交付前体检）：① 方法论/策略里的示例句（五年级数学、读题跳字、周三换老师）被模型当成对方的真实情况照搬——家长问编程课，大成说「您孩子五年级读题跳字」。加「只用对方说过的信息」一节，示例句标明是示例。② 一开口七八十字，加 turn_limit。

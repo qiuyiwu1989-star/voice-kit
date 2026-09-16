@@ -600,7 +600,9 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
                               reasoning_effort=asm.get("reasoning_effort"))
             # 括号里的舞台提示（「（先接住情绪，不问情境）」）是策略文件泄进正文，语音里会被念出来。
             # 按句剥，剥完还剩字才下发。TRTC 那边对应 FilterBracketsContent。
-            sents = (_strip_stage(ev["text"]) for ev in out_gate.filter(by_sentence(toks), low_latency=True)) \
+            # 闸门放行后再按整句拼一次才剥舞台提示：结尾没有句号的那段会被闸门的安全垫拆成几块，
+            # 逐块剥认不出「（等两三秒，对方先说话）」，整句漏进语音（2026-09-17 交付前体检抓到）。
+            sents = (_strip_stage(t) for t in by_sentence(ev["text"] for ev in out_gate.filter(by_sentence(toks), low_latency=True))) \
                 if out_gate else (_strip_stage(t) for t in by_sentence(toks))
             # 一轮最多说多少（manifest.turn_limit）：句子边界截断并关掉上游。没配置就原样透传。
             _cut = _log_turn_cut(ag.id)

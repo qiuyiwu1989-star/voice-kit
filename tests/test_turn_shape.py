@@ -138,7 +138,7 @@ def test_agent_chat_relaxes_when_asked_for_feedback(app):
 
 def test_agent_without_turn_limit_is_not_truncated(app):
     app.state.fake.script["你好"] = LONG
-    t = sse_text(chat(TestClient(app), "guwen-axun", "你好", Authorization="Bearer door"))
+    t = sse_text(chat(TestClient(app), "listener", "你好", Authorization="Bearer door"))   # 选一个没配 turn_limit 的 agent（三个陪练对手 09-17 都配上了）
     assert t == LONG
 
 
@@ -232,3 +232,12 @@ def test_testkit_turn_limit_check():
     assert C.turn_limit(Scenario(id="x", user="u"), Suite(name="t", scenarios=[]), r(LONG)) == []   # 没给上限不查
     assert C.turn_limit(Scenario(id="x", user="u", max_sentences=10, max_chars=200), su, r(LONG)) == []
     assert "turn_limit" in C.CHECKS
+
+
+def test_stage_direction_without_period_is_stripped_after_gate(app):
+    """结尾没有句号的舞台提示会被输出闸门的安全垫拆成几块，逐块剥认不出来，整句念出去
+    （2026-09-17 交付前体检：大成开场说出「（等两三秒，对方先说话）」）。"""
+    app.state.fake.script["你好"] = "（等两三秒，对方先说话）"
+    assert sse_text(chat(TestClient(app), "chengjiao-dacheng", "你好", Authorization="Bearer door")).strip() == ""
+    app.state.fake.script["在吗"] = "您比过几家了？（停顿）"
+    assert sse_text(chat(TestClient(app), "chengjiao-dacheng", "在吗", Authorization="Bearer door")).strip() == "您比过几家了？"

@@ -1,6 +1,6 @@
 id: chengjiao-dacheng
 name: 大成 · 直达型成交
-version: 0.1.0
+version: 0.2.0
 kind: config
 status: draft
 blurb: 比过几家了？我直接给你判断
@@ -15,9 +15,12 @@ shells:   # 这个 agent 服务 AI 教练的哪些壳（真源在这里，REP �
   - chengjiao-dacheng
 read_level: L2
 model: deepseek-v4-flash
+# 一轮最多说几句、几个字，平台在句子边界截断；对方要意见时放宽（2026-09-17 交付前体检：一开口八十多字）
+turn_limit: {sentences: 2, chars: 60, feedback_sentences: 4, feedback_chars: 160}
 rails: adult_basic
 voice: 603003   # 随和老李（男·超自然·年纪偏大）——做了十年的老顾问
 voice_en: 101050   # 英文场的嗓子：腾讯流式合成忽略语言参数，中文音色念英文是中文口音（2026-09-16 实测）
 layers: [persona.md, method.md, playbook.md]
 notes: 客户沟通三件套之三。场景：客户已经比过几家，要个判断。方法论 Challenger，先给观点再定制，敢说不。和阿询是刻意的对照组。
 model_note: 2026-09-14 定 deepseek-v4-flash：服务器实测 6/6 首字 1.0–1.2s；glm-5.2 同批 6 次里 2.9s 和 7.0s 各一次。语音看尾部不看平均。
+# 0.2.0（2026-09-17 交付前体检）：① 方法论/策略里的示例句（五年级数学、读题跳字、周三换老师）被模型当成对方的真实情况照搬——家长问编程课，大成说「您孩子五年级读题跳字」。加「只用对方说过的信息」一节，示例句标明是示例。② 一开口七八十字，加 turn_limit。
