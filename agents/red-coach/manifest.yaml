@@ -1,7 +1,7 @@
 id: red-coach
 name: RED 融资叙事教练
 short_name: RED
-version: 2.0.1
+version: 2.0.2
 kind: config
 status: production
 archetype: 教练
