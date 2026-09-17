@@ -19,7 +19,7 @@ rails: no_scoring
 model: deepseek-v4-flash
 turn_limit: {sentences: 2, chars: 60, feedback_sentences: 4, feedback_chars: 160}
 voice: 601002   # 沿用 AI 教练 seed-agent-boss.ts 的选择：和「结论先行」听得出是两个人
-voice_en: 101050   # 英文场的嗓子：腾讯流式合成忽略语言参数，中文音色念英文是中文口音（2026-09-16 实测）
+voice_en: 501008   # 英文场的嗓子：大模型档（2026-09-17 用户听样本后定，WeJack/WeRose 不如中文自然）
 layers: [persona.md, method.md, playbook.md]
 updated_at: 2026-09-16
 notes: >-

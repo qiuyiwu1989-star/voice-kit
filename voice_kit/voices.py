@@ -158,10 +158,18 @@ def role_options(role: str = "qiuqiu"):
 
 # ---------------------------------------------------------------- 英文（2026-09-14 用户要中英都能用）
 # 腾讯标准英文音色。超自然那批是中文模型，念英文会走调；中英混说时仍用中文音色（它们能读英文单词）。
+# 2026-09-17 用户听了同一句英文的 8 个样本后拍板：英文默认用大模型档 WeJames / WeWinny，
+# WeJack / WeRose 明显不如中文自然。大模型档排前面，精品档留作候选。
+# 腾讯官方表（cloud.tencent.com/document/product/1073/92668）里 501008 是「WeJames 外语男声」，
+# 我们中文表里把它登记成了「沉稳男声」（结论先行的中文嗓子）——交付后核对要不要给那个老板换真正的中文男声。
 EN_VOICES = [
+    Voice(501008, "WeJames", "男", "大模型", "外语男声"),
+    Voice(501009, "WeWinny", "女", "大模型", "外语女声"),
     Voice(101050, "WeJack", "男", "精品", "英文男声"),
     Voice(101051, "WeRose", "女", "精品", "英文女声"),
 ]
+EN_BY_ID = {v.id: v for v in EN_VOICES}
+EN_DEFAULT_MALE, EN_DEFAULT_FEMALE = 501008, 501009
 for _v in EN_VOICES:
     BY_ID.setdefault(_v.id, _v)
 
@@ -180,10 +188,11 @@ def options_for(lang: str = "zh", default=None):
             pass
     out = []
     for i in ids:
-        v = BY_ID.get(i)
+        # 同一个 id 可能中英两张表都有（501008）：英文场显示英文表里的名字
+        v = (EN_BY_ID.get(i) if lang == "en" else None) or BY_ID.get(i)
         if v:
             out.append({"id": v.id, "name": v.name, "gender": v.gender, "tier": v.tier,
-                        "scene": v.scene, "lang": "en" if v in EN_VOICES else "zh"})
+                        "scene": v.scene, "lang": "en" if (lang == "en" and i in EN_BY_ID) or v in EN_VOICES else "zh"})
     return out
 
 
@@ -194,7 +203,7 @@ def default_for_agent(manifest: dict, lang: str = "zh") -> int:
     同一个音色、同一段英文，传 1 / 2 / 不传，音频逐字节相同。中文播音员念英文就是中文口音，
     靠参数救不回来，只能换一个英文音色。
 
-    顺序：manifest.voice_en（显式指定）> 按中文音色的性别配一个英文音色 > WeJack。
+    顺序：manifest.voice_en（显式指定）> 按中文音色的性别配一个英文音色（男 WeJames / 女 WeWinny）。
     """
     raw = manifest.get("voice")
     zh = resolve(str(raw) if raw is not None else "assistant", override=raw)
@@ -208,5 +217,5 @@ def default_for_agent(manifest: dict, lang: str = "zh") -> int:
         except (TypeError, ValueError):
             pass
     g = BY_ID[zh].gender if zh in BY_ID else "男"
-    return 101051 if g.startswith("女") else 101050
+    return EN_DEFAULT_FEMALE if g.startswith("女") else EN_DEFAULT_MALE
 

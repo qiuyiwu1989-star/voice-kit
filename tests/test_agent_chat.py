@@ -344,7 +344,7 @@ def test_language_switch_drives_asr_engine_and_reply_language(app, monkeypatch):
     zh = c.get("/v1/agents/chengjiao-dacheng/voices?lang=zh").json()
     assert zh["default"] == 603003 and zh["options"][0]["id"] == 603003
     en = c.get("/v1/agents/chengjiao-dacheng/voices?lang=en").json()
-    assert {o["id"] for o in en["options"]} == {101050, 101051} and all(o["lang"] == "en" for o in en["options"])
+    assert {o["id"] for o in en["options"]} == {501008, 501009, 101050, 101051} and all(o["lang"] == "en" for o in en["options"])
 
 
 def test_talk_and_me_pages_define_helpers_before_use():
@@ -506,19 +506,28 @@ def test_english_voice_default_is_an_english_voice(app, root, monkeypatch):
     from voice_kit import voices as V
     monkeypatch.setenv("VOICEKIT_UI_TOKEN", "go")
     c = TestClient(app, cookies={"vk_ui": "go"})
-    for aid, zh, en in (("boss-decide", 501008, 101050), ("kefu-xiaoan", 603004, 101051), ("red-coach", 501003, 101050)):
+    for aid, zh, en in (("boss-decide", 501008, 501008), ("kefu-xiaoan", 603004, 501009), ("red-coach", 501003, 501008)):
         z = c.get(f"/v1/agents/{aid}/voices?lang=zh").json()
         e = c.get(f"/v1/agents/{aid}/voices?lang=en").json()
         assert z["default"] == zh, aid
         assert e["default"] == en and e["options"][0]["id"] == en, aid
     # 没写 voice_en：按中文音色的性别配
-    assert V.default_for_agent({"voice": 603004}, "en") == 101051
-    assert V.default_for_agent({"voice": 501008}, "en") == 101050
+    assert V.default_for_agent({"voice": 603004}, "en") == 501009
+    assert V.default_for_agent({"voice": 501008}, "en") == 501008
     # voice_en 写了表里没有的：退回按性别配，不报错
-    assert V.default_for_agent({"voice": 603004, "voice_en": 999}, "en") == 101051
+    assert V.default_for_agent({"voice": 603004, "voice_en": 999}, "en") == 501009
 
 
 def test_boss_agents_are_sparring_partners():
     ags = {a.id: a for a in A.load_all(REPO / "agents")}
     assert ags["boss-decide"].manifest["archetype"] == "陪练对手"
     assert ags["boss-risk"].manifest["archetype"] == "陪练对手"
+
+
+def test_english_voice_names_and_zh_side_unchanged():
+    """501008 中英两张表都有：英文场显示 WeJames，中文场仍是「沉稳男声」；中文默认不受这次改动影响。"""
+    from voice_kit import voices as V
+    en = V.options_for("en", default=501008)
+    assert en[0]["id"] == 501008 and en[0]["name"] == "WeJames" and en[0]["lang"] == "en"
+    assert V.BY_ID[501008].name == "沉稳男声"
+    assert V.default_for_agent({"voice": 501008}, "zh") == 501008
