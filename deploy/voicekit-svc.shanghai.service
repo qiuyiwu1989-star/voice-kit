@@ -1,0 +1,15 @@
+[Unit]
+Description=voice-kit 测试环境（上海）：agent / 记忆 / 回流中台
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+EnvironmentFile=/etc/voicekit-svc.env
+WorkingDirectory=/opt/voicekit-svc
+ExecStart=/opt/voicekit-svc/venv/bin/uvicorn --factory voice_kit.service:create_service --host 127.0.0.1 --port 8020
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
