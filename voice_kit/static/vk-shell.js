@@ -34,7 +34,8 @@
     more:'<path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="2.6"/>', play:'<path d="M8 5v14l11-7z"/>',
     trash:'<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>', menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
     empty:'<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h4l2 2h4l2-2h4"/>',
-    ext:'<path d="M14 5h5v5M19 5l-8 8M17 14v5H5V7h5"/>', undo:'<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2"/>'
+    ext:'<path d="M14 5h5v5M19 5l-8 8M17 14v5H5V7h5"/>', logout:'<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/>',
+    user:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>', undo:'<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2"/>'
   };
   function icon(name, cls){ return '<svg class="vk-ico' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (ICONS[name] || '') + '</svg>'; }
 
@@ -75,6 +76,8 @@
     var env = ((body.dataset && body.dataset.vkEnv) || '线上').trim();
     if(!env || env.indexOf('{{') === 0) env = '线上';
     var isProd = env === '线上';
+    var user = ((body.dataset && body.dataset.vkUser) || '').trim();
+    if(user.indexOf('{{') === 0) user = '';
     var cur = MODULES.filter(function(m){ return m.id === state.module; })[0] || {label:''};
     state.product = storedProduct();
 
@@ -86,7 +89,8 @@
         return '<a href="' + m.href + '" data-nav="' + m.id + '" title="' + esc(m.label) + '"' + (m.id === state.module ? ' aria-current="page"' : '') + '>' +
           icon(m.icon) + '<span class="lbl">' + esc(m.label) + '</span><span class="vk-count" data-count="' + m.id + '" hidden></span></a>';
       }).join('') + '</nav>' +
-      '<div class="vk-side-foot"><p class="hint">系统只标问题，发布由人点。</p></div>';
+      '<div class="vk-side-foot"><p class="hint">系统只标问题，发布由人点。</p>' +
+        '<a class="vk-logout" href="/admin/logout" title="退出登录" aria-label="退出登录">' + icon('logout') + '<span class="lbl">退出登录</span></a></div>';
 
     var top = document.createElement('header');
     top.className = 'vk-top';
@@ -98,7 +102,7 @@
         '<input id="vkSearch" type="search" autocomplete="off" aria-label="搜索当前列表" placeholder="搜索"><kbd aria-hidden="true">/</kbd></div>' +
       '<span class="vk-env' + (isProd ? '' : ' local') + '" title="' + (isProd ? '线上环境：这里的发布、删除都是真的' : '非线上环境：' + esc(env)) + '"><i aria-hidden="true"></i>' + esc(env) +
         (isProd ? '<span class="host">' + esc(location.host || '') + '</span>' : '') + '</span>' +
-      '<span class="vk-ticket" id="vkTicket" title="页面能打开说明门票有效；接口返回 401 时这里会变红">' + icon('lock') + '<i aria-hidden="true"></i><span>门票有效</span></span>' +
+      '<span class="vk-ticket" id="vkTicket" title="' + (user ? '当前登录：' + esc(user) : '已登录') + '">' + icon('user') + '<i aria-hidden="true"></i><span>' + esc(user || '已登录') + '</span></span>' +
       '<button class="vk-iconbtn" id="vkTheme" aria-label="切换主题"></button>';
 
     var skip = document.createElement('a');
@@ -347,17 +351,22 @@
     el.querySelector('button').focus();
   }
 
-  /* ------------------------------------------------------------ 门票失效 */
-  var blocked = false;
+  /* ------------------------------------------------------------ 登录失效
+   * 接口回 401：会话过期或被改密码踢掉了 → 跳登录页，登录完回到当前页。
+   * 不再弹遮罩提示门票——人走账号密码，门票只给脚本。 */
+  var redirecting = false;
+  function loginHref(){
+    var here = '/admin/agents';
+    try{ here = location.pathname + location.search; }catch(e){}
+    return '/admin/login?next=' + encodeURIComponent(here);
+  }
   function unauthorized(){
-    var t = $('#vkTicket'); if(t){ t.classList.add('bad'); var s = t.querySelector('span'); if(s) s.textContent = '门票无效'; }
-    if(blocked || !document.body) return; blocked = true;
-    var b = document.createElement('div'); b.className = 'vk-block'; b.setAttribute('role', 'alertdialog'); b.setAttribute('aria-labelledby', 'vkBlockT');
-    b.innerHTML = '<div class="vk-card"><h3 id="vkBlockT">门票过期了</h3><p class="hint" style="margin-top:8px">在地址后面加 <code>?k=&lt;门票&gt;</code> 重新进来。页面上已经加载的内容不会丢，但接下来的操作都不会成功。</p></div>';
-    document.body.appendChild(b);
+    var t = $('#vkTicket'); if(t){ t.classList.add('bad'); var s = t.querySelector('span'); if(s) s.textContent = '登录已失效'; }
+    if(redirecting) return; redirecting = true;
+    try{ location.href = loginHref(); }catch(e){}
   }
 
-  /* 页面共用的 fetch 包装：出错时抛带后端原因的 Error，401 顺手标门票无效 */
+  /* 页面共用的 fetch 包装：出错时抛带后端原因的 Error，401 跳登录页 */
   function api(base){
     return async function(path, opt){
       opt = opt || {};

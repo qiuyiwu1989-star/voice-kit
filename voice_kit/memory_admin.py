@@ -31,7 +31,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from . import agents as A
 from . import memory as M
-from .admin import _guard, _root, _token, render_page
+from .admin import _guard, _root, enabled, render_page
 
 _HTML = Path(__file__).parent / "memory.html"
 
@@ -89,7 +89,7 @@ def build_router(known_products: Optional[Callable[[], Iterable[str]]] = None) -
 
     @r.get("/admin", include_in_schema=False)
     def admin_home(request: Request):
-        if not _token():
+        if not enabled():
             raise HTTPException(404)
         q = f"?{request.url.query}" if request.url.query else ""
         return RedirectResponse("/admin/agents" + q, status_code=307)

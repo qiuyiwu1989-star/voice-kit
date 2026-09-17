@@ -14,3 +14,5 @@ agents/*/reports/
 agents/users/
 # 回流：每一轮的原话、分析、提案、用例、审计（feedback.py）。_ 开头的目录都不是 agent
 agents/_feedback/
+# 后台登录审计（admin_auth.py）：IP + 用户名，属运维数据
+agents/_admin_audit.jsonl

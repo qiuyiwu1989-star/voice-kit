@@ -316,6 +316,6 @@ CI 里用 `AppTarget` + 假 LLM 测 testkit 自己（`tests/test_testkit.py`）�
 第六层铁律是 manifest 里的 `rails` 档位，由平台注入）。`voice_kit/agents.py` 负责读、
 静态审查（入职第一关：字典、档位与受众匹配、读取层级、松绑措辞、事实层不可写）、写回升版本。
 
-后台 `/admin/agents?k=<VOICEKIT_ADMIN_TOKEN>`：编辑六层、校验草稿、升版本、看 git 历史、
+后台 `/admin/agents`（`/admin/login` 账号密码登录，见 docs/后台登录.md；脚本仍可用门票 `VOICEKIT_ADMIN_TOKEN`）：编辑六层、校验草稿、升版本、看 git 历史、
 跑 testkit 套件并把报告落到 `agents/<id>/reports/`，评估卡的「守线 / 快」从报告读。
-没配 token 时后台 404。本地看：`sh scripts/dev_admin.sh`（全假凭据）。
+密码哈希和门票都没配时后台 404。本地看：`sh scripts/dev_admin.sh`（全假凭据）。

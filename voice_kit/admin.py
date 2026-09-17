@@ -1,7 +1,8 @@
 """Agent 后台：`/admin/agents`。文件的编辑器 + 校验器，不是另一份数据库。
 
-门票：`VOICEKIT_ADMIN_TOKEN`。第一次带 `?k=<token>` 进来会种 cookie，之后页面里的
-fetch 不用带。没配 token 时整个后台 404——不存在"默认开放"的后台。
+登录（2026-09-17 起）：人走 `/admin/login` 用户名 + 密码（admin_auth.py，docs/后台登录.md）；
+门票 `VOICEKIT_ADMIN_TOKEN`（`?k=` / cookie vk_admin / Bearer）保留给脚本和自动化。
+门票和密码哈希都没配时整个后台 404——不存在"默认开放"的后台。
 
 接口全部挂在 /admin/agents/api/*：
     GET  /list                       所有 agent 摘要 + 校验结果数
@@ -16,9 +17,9 @@ fetch 不用带。没配 token 时整个后台 404——不存在"默认开放"�
     GET  /export[?agent=id]          导出六层文件 tar.gz（服务器上没 git 时靠它带回本地）
 
 三页共用的外壳资源（统一后台设计规范 §3.11）：
-    GET  /admin/static/{name}        只放行 vk-admin.css / vk-shell.js，同一张门票
-页面 HTML 里的 `{{VK_ASSET_V}}`（资源内容哈希，防缓存）和 `{{VK_ENV}}`（顶栏环境标识，
-`VOICEKIT_ENV`，默认「线上」）由 `render_page` 在返回时替换。
+    GET  /admin/static/{name}        只放行 vk-admin.css / vk-shell.js，同样要登录或门票
+页面 HTML 里的 `{{VK_ASSET_V}}`（资源内容哈希，防缓存）、`{{VK_ENV}}`（顶栏环境标识，
+`VOICEKIT_ENV`，默认「线上」）和 `{{VK_USER}}`（当前登录用户名）由 `render_page` 在返回时替换。
 """
 from __future__ import annotations
 
@@ -31,8 +32,9 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from . import admin_auth as AUTH
 from . import agents as A
 
 COOKIE = "vk_admin"
@@ -51,7 +53,12 @@ def _token() -> str:
     return os.environ.get("VOICEKIT_ADMIN_TOKEN", "").strip()
 
 
-def _authed(request: Request) -> bool:
+def enabled() -> bool:
+    """后台开不开：门票或管理员密码哈希至少配了一个。两个都没配 → 整个后台 404。"""
+    return bool(_token()) or AUTH.login_enabled()
+
+
+def _token_ok(request: Request) -> bool:
     tok = _token()
     if not tok:
         return False
@@ -60,11 +67,21 @@ def _authed(request: Request) -> bool:
     return bool(given) and hmac.compare_digest(given, tok)
 
 
+def current_user(request: Request) -> Optional[str]:
+    """登录会话里的用户名；门票进来的（脚本）或没登录 → None。"""
+    return AUTH.session_user(request.cookies.get(AUTH.SESSION_COOKIE), AUTH.LIMITER.clock())
+
+
+def _authed(request: Request) -> bool:
+    """有效登录会话，或者门票（保留给脚本和自动化）。"""
+    return bool(current_user(request)) or _token_ok(request)
+
+
 def _guard(request: Request):
-    if not _token():
+    if not enabled():
         raise HTTPException(404)
     if not _authed(request):
-        raise HTTPException(401, "需要后台门票")
+        raise HTTPException(401, "需要登录")
 
 
 def asset_version() -> str:
@@ -83,16 +100,22 @@ def env_label() -> str:
 
 
 def render_page(html_path: Path, request: Request) -> HTMLResponse:
-    """三个后台页共用：门票校验 → 替换占位符 → 首次带 ?k= 时种 cookie。"""
-    if not _token():
+    """三个后台页共用：鉴权 → 替换占位符 → 首次带 ?k= 时种门票 cookie（脚本用）。
+
+    没登录：配了管理员密码就 302 去登录页（带 next）；只配了门票的老部署维持 401。"""
+    if not enabled():
         raise HTTPException(404)
     if not _authed(request):
-        return HTMLResponse("<meta charset=utf-8><p>需要门票：在地址后面加 <code>?k=&lt;VOICEKIT_ADMIN_TOKEN&gt;</code></p>", 401)
+        if AUTH.login_enabled():
+            return RedirectResponse(AUTH.login_url(request), status_code=302)
+        return HTMLResponse("<meta charset=utf-8><p>后台还没启用账号密码登录：服务器需配置 "
+                            "<code>VOICEKIT_ADMIN_PASSWORD_HASH</code>（见 docs/后台登录.md）。</p>", 401)
     text = (html_path.read_text(encoding="utf-8")
             .replace("{{VK_ASSET_V}}", asset_version())
-            .replace("{{VK_ENV}}", _html.escape(env_label(), quote=True)))
+            .replace("{{VK_ENV}}", _html.escape(env_label(), quote=True))
+            .replace("{{VK_USER}}", _html.escape(current_user(request) or "", quote=True)))
     resp = HTMLResponse(text)
-    if request.query_params.get("k"):
+    if request.query_params.get("k") and _token_ok(request):
         resp.set_cookie(COOKIE, request.query_params["k"], httponly=True, samesite="lax", max_age=7 * 86400)
     return resp
 
@@ -102,7 +125,7 @@ def build_static_router() -> APIRouter:
 
     @r.get("/admin/static/{name}", include_in_schema=False)
     def static(name: str, request: Request):
-        _guard(request)                      # 和页面、接口同一张门票
+        _guard(request)                      # 和页面、接口同一套鉴权
         if name not in ADMIN_ASSETS or not (_STATIC / name).is_file():
             raise HTTPException(404)
         return Response((_STATIC / name).read_bytes(), media_type=ADMIN_ASSETS[name],

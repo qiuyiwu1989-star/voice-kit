@@ -125,6 +125,9 @@ pre{font-family:var(--vk-font-mono)}
 .vk-count{display:inline-block;min-width:18px;height:18px;padding:0 5px;border-radius:var(--vk-radius-pill);background:var(--vk-warn-bg);color:var(--vk-warn-ink);font:600 11px/18px var(--vk-font-latin);text-align:center;font-variant-numeric:tabular-nums}
 .vk-side-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--vk-border);padding-top:10px}
 .vk-side-foot .hint{padding:4px 10px}
+.vk-logout{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:var(--vk-radius-sm);color:var(--vk-fg-2);font-size:var(--vk-text-sm);text-decoration:none}
+.vk-logout:hover{background:var(--vk-surface-2);color:var(--vk-fg);text-decoration:none}
+.vk-logout .vk-ico{width:18px;height:18px;flex:none}
 
 .vk-top{grid-column:2;grid-row:1;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid var(--vk-border);background:color-mix(in srgb,var(--vk-bg) 82%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:var(--vk-z-topbar);min-width:0;position:relative}
 .vk-crumb{display:flex;align-items:center;gap:6px;font-size:var(--vk-text-sm);min-width:0;overflow:hidden;white-space:nowrap;flex:1}
@@ -457,7 +460,7 @@ dialog.vk-dialog[open]{animation:vk-pop var(--vk-dur-base) var(--vk-ease)}
 .vk-toast .grow{overflow-wrap:anywhere}
 @keyframes vk-tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
-/* 门票失效遮罩 */
+/* 全屏阻断遮罩（401 已改为跳登录页，这里留给别的阻断场景） */
 .vk-block{position:fixed;inset:0;z-index:var(--vk-z-modal);display:grid;place-items:center;background:var(--vk-backdrop);padding:16px}
 .vk-block .vk-card{max-width:420px}
 
@@ -471,7 +474,7 @@ dialog.vk-dialog[open]{animation:vk-pop var(--vk-dur-base) var(--vk-ease)}
   .vk-side{padding:12px 8px}
   .vk-brand b,.vk-brand .kicker,.vk-nav .lbl,.vk-side-foot .lbl,.vk-side-foot .hint{display:none}
   .vk-brand{justify-content:center;padding:0}
-  .vk-nav a{justify-content:center;padding:0}
+  .vk-nav a,.vk-logout{justify-content:center;padding:0}
   .vk-nav a .vk-count{position:absolute;top:1px;right:1px;min-width:16px;height:16px;line-height:16px;font-size:10px;padding:0 4px}
   .vk-nav a[aria-current="page"]::before{left:-8px}
   .vk-search{width:auto;padding:0;border-color:transparent;background:transparent}
