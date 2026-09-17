@@ -1,0 +1,15 @@
+[Unit]
+Description=语音中台 测试环境（duihua.qiuyiwu.com，127.0.0.1:8030，独立数据与门票）
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+EnvironmentFile=/etc/voicekit-staging.env
+WorkingDirectory=/opt/voicekit-staging
+ExecStart=/opt/voicekit-staging/venv/bin/uvicorn --factory voice_kit.service:create_service --host 127.0.0.1 --port 8030
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
