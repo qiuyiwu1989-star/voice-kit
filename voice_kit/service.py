@@ -403,6 +403,12 @@ def create_service(tenants_path: Optional[str] = None) -> FastAPI:
 
     # ------------------------------------------------------------ 运维
 
+    @app.get("/")
+    def root_redirect():
+        """语音中台没有首页：打开域名直接去后台（没登录会再跳登录页）。2026-09-17 用户打开 duihua 根路径看到 404。"""
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse("/admin/agents", status_code=302)
+
     @app.get("/healthz")
     def healthz():
         registry.maybe_reload()

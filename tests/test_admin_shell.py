@@ -220,3 +220,19 @@ def test_memory_page_keeps_backend_contract():
     assert "JSON.stringify({confirm: ok.value})" in src and "typed: s.uid" in src
     assert "expect:{category:f.category, content:f.content}" in src
     assert "JSON.stringify({expect_at: j.at||''})" in src
+
+
+def test_root_redirects_to_admin(app_client_for_root=None):
+    """打开中台域名根路径直接去后台，而不是 404（2026-09-17）。"""
+    import os
+    from fastapi.testclient import TestClient
+    from voice_kit import service
+    os.environ.setdefault("TOKENHUB_API_KEY", "x")
+    for k in ("TC_SECRET_ID", "TC_SECRET_KEY", "TRTC_SDKSECRETKEY"):
+        os.environ.setdefault(k, "x")
+    os.environ.setdefault("TENCENT_APPID", "1"); os.environ.setdefault("TRTC_SDKAPPID", "1")
+    os.environ.setdefault("VOICEKIT_PUBLIC_URL", "https://voice.test")
+    import json, tempfile
+    tp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False); json.dump({"tenants": []}, tp); tp.close()
+    r = TestClient(service.create_service(tp.name), follow_redirects=False).get("/")
+    assert r.status_code == 302 and r.headers["location"] == "/admin/agents"
